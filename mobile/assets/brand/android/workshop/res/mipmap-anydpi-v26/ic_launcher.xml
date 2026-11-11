@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fleet Geeks adaptive launcher icon from vectors only (Android 8+). Copied by tools/apply_vector_icons.ps1. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/fg_ic_background"/>
+    <foreground android:drawable="@drawable/fg_ic_foreground"/>
+    <monochrome android:drawable="@drawable/fg_ic_monochrome"/>
+</adaptive-icon>

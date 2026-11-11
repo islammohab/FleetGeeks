@@ -1,0 +1,60 @@
+name: Build Android APKs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: "Fleet Geeks API base URL (e.g. https://api.example.com)"
+        required: true
+        default: "http://10.0.2.2:5098"
+      dev_signin:
+        description: "Show development sign-in with demo users"
+        required: true
+        default: "true"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      FG_API: ${{ github.event.inputs.api_url || vars.FG_API || 'http://10.0.2.2:5098' }}
+      FG_DEV_SIGNIN: ${{ github.event.inputs.dev_signin || 'true' }}
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Prepare Android projects (permissions, icons, splash)
+        shell: pwsh
+        run: ./tools/prepare_android.ps1 -Brand -AllowHttp
+
+      - name: Build Workshop APK
+        working-directory: mobile/apps/workshop_app
+        run: flutter build apk --release --dart-define=FG_API=$FG_API --dart-define=FG_DEV_SIGNIN=$FG_DEV_SIGNIN
+
+      - name: Build Customer APK
+        working-directory: mobile/apps/customer_app
+        run: flutter build apk --release --dart-define=FG_API=$FG_API --dart-define=FG_DEV_SIGNIN=$FG_DEV_SIGNIN
+
+      - name: Rename APKs
+        run: |
+          mkdir -p ../out
+          cp apps/workshop_app/build/app/outputs/flutter-apk/app-release.apk ../out/FleetGeeks-Workshop.apk
+          cp apps/customer_app/build/app/outputs/flutter-apk/app-release.apk ../out/FleetGeeks-Customer.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fleet-geeks-apks
+          path: out/*.apk

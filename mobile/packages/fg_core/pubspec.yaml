@@ -1,0 +1,54 @@
+name: fg_core
+description: Fleet Geeks shared mobile core - API client, sign-in, offline outbox, EN/AR text, design system (theme, icons, widgets).
+version: 1.1.0
+publish_to: none
+resolution: workspace
+environment:
+  sdk: ^3.8.0
+  flutter: ">=3.35.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_riverpod: ^3.0.0
+  http: ^1.4.0
+  http_parser: ^4.1.0
+  flutter_secure_storage: ^10.0.0
+  sqflite: ^2.4.2
+  path: ^1.9.0
+  connectivity_plus: ^7.0.0
+  uuid: ^4.5.1
+  intl: any
+  # Lucide icon font (ISC licence). Only `LucideIcons.<name>` (regular weight) is used, through FgIcons.
+  lucide_icons_flutter: ^4.0.2
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+# Brand fonts, bundled (SIL Open Font License 1.1, licence texts next to the files). Apps use them as
+# 'packages/fg_core/Inter' and 'packages/fg_core/IBMPlexSansArabic' (see FgFonts in lib/src/theme.dart).
+# Re-download with mobile/tools/get_fonts.ps1.
+flutter:
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: fonts/Inter-Bold.ttf
+          weight: 700
+    - family: IBMPlexSansArabic
+      fonts:
+        - asset: fonts/IBMPlexSansArabic-Regular.ttf
+          weight: 400
+        - asset: fonts/IBMPlexSansArabic-Medium.ttf
+          weight: 500
+        - asset: fonts/IBMPlexSansArabic-SemiBold.ttf
+          weight: 600
+        - asset: fonts/IBMPlexSansArabic-Bold.ttf
+          weight: 700

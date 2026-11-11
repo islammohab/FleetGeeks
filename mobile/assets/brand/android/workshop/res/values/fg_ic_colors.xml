@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Adaptive icon background: a plain colour (no PNG). -->
+    <color name="fg_ic_background">#162125</color>
+</resources>
