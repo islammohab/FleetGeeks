@@ -1,5 +1,5 @@
 name: workshop_app
-description: Fleet Geeks Workshop app: board, gate QR, technician jobs with big buttons (offline), checklist, QC, parts, evidence, signatures.
+description: "Fleet Geeks Workshop app: board, gate QR, technician jobs with big buttons (offline), checklist, QC, parts, evidence, signatures."
 version: 1.1.0+2
 publish_to: none
 resolution: workspace
