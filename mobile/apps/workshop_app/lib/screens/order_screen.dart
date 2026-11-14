@@ -56,7 +56,7 @@ class OrderScreen extends ConsumerWidget {
       initialIndex: initialTab,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(orderId),
+          title: FittedBox(fit: BoxFit.scaleDown, alignment: AlignmentDirectional.centerStart, child: Text(orderId, maxLines: 1, softWrap: false)),
           actions: [
             IconButton(
               tooltip: s.t('messages'),
@@ -309,20 +309,16 @@ class _OrderHeader extends ConsumerWidget {
       color: fg.surface,
       padding: const EdgeInsets.fromLTRB(FgSpace.gutter, FgSpace.s3, FgSpace.gutter, FgSpace.s3),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${s.t('vehicle')} ${o.s('VehicleId')}', style: context.tt.titleMedium),
-              Text(
-                [s.status(o.s('ServiceType')), if (o.s('CustodyRole').isNotEmpty) '${s.t('custody')}: ${s.status(o.s('CustodyRole'))} ${o.s('CustodyHolder')}'.trim()].join(' · '),
-                style: context.tt.bodySmall,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ]),
-          ),
+        // vehicle and status on one line when they fit, otherwise the status drops under it; the details get the full width
+        Wrap(spacing: FgSpace.s2, runSpacing: FgSpace.s1, crossAxisAlignment: WrapCrossAlignment.center, alignment: WrapAlignment.spaceBetween, children: [
+          Text('${s.t('vehicle')} ${o.s('VehicleId')}', style: context.tt.titleMedium),
           StatusPill.order(o.s('Status')),
         ]),
+        const SizedBox(height: 2),
+        Text(
+          [s.status(o.s('ServiceType')), if (o.s('CustodyRole').isNotEmpty) '${s.t('custody')}: ${s.status(o.s('CustodyRole'))} ${o.s('CustodyHolder')}'.trim()].join(' · '),
+          style: context.tt.bodySmall,
+        ),
         const SizedBox(height: FgSpace.s3),
         OrderProgress(status: o.s('Status'), flow: flow, compact: true),
         if (promise != null) ...[

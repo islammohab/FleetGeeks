@@ -75,23 +75,25 @@ class FgTimeline extends ConsumerWidget {
           final body = Padding(
             padding: EdgeInsetsDirectional.only(start: FgSpace.s3, bottom: last ? 0 : FgSpace.s4, top: 3),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Expanded(
-                  child: Text(
-                    e.title,
-                    style: context.tt.titleSmall?.copyWith(
-                      color: e.step == FgStep.upcoming ? fg.textMuted : fg.text,
-                      fontWeight: e.step == FgStep.current ? FontWeight.w700 : FontWeight.w600,
-                    ),
-                  ),
+              // Title on its own line; the time and the status follow under it, so a long title is never squeezed.
+              Text(
+                e.title,
+                style: context.tt.titleSmall?.copyWith(
+                  color: e.step == FgStep.upcoming ? fg.textMuted : fg.text,
+                  fontWeight: e.step == FgStep.current ? FontWeight.w700 : FontWeight.w600,
                 ),
-                if (e.time != null)
-                  Text(
-                    showDate ? fmtDate(e.time, s.lang) : fmtTime(e.time, s.lang),
-                    style: context.tt.labelSmall?.copyWith(fontFeatures: FgFonts.tabular),
-                  ),
-                if (e.trailing != null) ...[const SizedBox(width: FgSpace.s2), e.trailing!],
-              ]),
+              ),
+              if (e.time != null || e.trailing != null) ...[
+                const SizedBox(height: 2),
+                Wrap(spacing: FgSpace.s2, runSpacing: FgSpace.s1, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                  if (e.time != null)
+                    Text(
+                      showDate ? fmtDate(e.time, s.lang) : fmtTime(e.time, s.lang),
+                      style: context.tt.labelSmall?.copyWith(fontFeatures: FgFonts.tabular),
+                    ),
+                  if (e.trailing != null) e.trailing!,
+                ]),
+              ],
               if (e.subtitle != null && e.subtitle!.isNotEmpty) ...[
                 const SizedBox(height: 2),
                 Text(e.subtitle!, style: context.tt.bodySmall),

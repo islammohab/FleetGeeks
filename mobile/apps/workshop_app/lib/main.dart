@@ -97,6 +97,7 @@ class WorkshopApp extends ConsumerWidget {
       return MaterialApp(
         title: s.t('appWorkshop'),
         debugShowCheckedModeBanner: false,
+        builder: fgAppFrame,
         theme: light,
         darkTheme: dark,
         locale: locale,
@@ -112,6 +113,7 @@ class WorkshopApp extends ConsumerWidget {
     return MaterialApp.router(
       title: s.t('appWorkshop'),
       debugShowCheckedModeBanner: false,
+        builder: fgAppFrame,
       theme: light,
       darkTheme: dark,
       locale: locale,

@@ -180,9 +180,15 @@ class PlateBadge extends StatelessWidget {
             borderRadius: FgRadius.brSm,
             border: Border.all(color: context.fg.text.withValues(alpha: 0.7), width: 1.5),
           ),
-          child: Text(
-            plate,
-            style: (large ? context.tt.titleMedium : context.tt.labelLarge)?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 1, fontFeatures: FgFonts.tabular),
+          // A plate is one unbroken line: it shrinks to fit a narrow place instead of wrapping letter by letter.
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              plate,
+              maxLines: 1,
+              softWrap: false,
+              style: (large ? context.tt.titleMedium : context.tt.labelLarge)?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 1, fontFeatures: FgFonts.tabular),
+            ),
           ),
         ),
       );
@@ -213,6 +219,8 @@ class FgListCard extends StatelessWidget {
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(title, style: context.tt.titleSmall, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    // The status pill sits under the title: the title keeps the full width and is never squeezed.
+                    if (trailing != null) ...[const SizedBox(height: FgSpace.s1), trailing!],
                     if (subtitle != null && subtitle!.isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(subtitle!, style: context.tt.bodyMedium?.copyWith(color: context.fg.textMuted), maxLines: 2, overflow: TextOverflow.ellipsis),
@@ -223,7 +231,6 @@ class FgListCard extends StatelessWidget {
                     ],
                   ]),
                 ),
-                if (trailing != null) ...[const SizedBox(width: FgSpace.s2), trailing!],
                 if (onTap != null) ...[
                   const SizedBox(width: FgSpace.s1),
                   Padding(padding: const EdgeInsets.only(top: 2), child: Icon(FgIcons.chevronForward, size: 18, color: context.fg.textMuted)),
@@ -268,17 +275,16 @@ class VehicleCard extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(FgSpace.s3),
             child: Row(children: [
-              VehicleArt(kind: vehicleKindOf(vehicleClass), width: 96),
+              VehicleArt(kind: vehicleKindOf(vehicleClass), width: 72),
               const SizedBox(width: FgSpace.s3),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Flexible(child: PlateBadge(plate)),
-                    const Spacer(),
+                  Wrap(spacing: FgSpace.s2, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                    PlateBadge(plate),
                     StatusPill(status, dense: true),
                   ]),
                   const SizedBox(height: 6),
-                  Text(title, style: context.tt.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(title, style: context.tt.titleSmall, maxLines: 2, overflow: TextOverflow.ellipsis),
                   if (subtitle != null && subtitle!.isNotEmpty) Text(subtitle!, style: context.tt.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
                   if (odometer != null || nextDue != null) ...[
                     const SizedBox(height: FgSpace.s1),

@@ -111,6 +111,57 @@ void main() {
     );
   });
 
+  testWidgets('lists at a very large system font (130 %)', tags: 'gallery', (tester) async {
+    await shot(
+      tester,
+      'lists_large_font',
+      () => MediaQuery(
+        data: const MediaQueryData(size: Size(360, 2000), textScaler: TextScaler.linear(1.3)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          const VehicleCard(plate: 'PW-1001', title: 'TOYOTA Corolla 2024', vehicleClass: 'CAR', status: 'UnderMaintenance', odometer: '25,120 km'),
+          const SizedBox(height: FgSpace.s3),
+          FgListCard(
+            leading: const IconTile(FgIcons.tasks, tone: FgTone.attention),
+            title: 'Estimate to approve',
+            subtitle: 'PW-1005',
+            trailing: StatusPill.order('AwaitingApproval'),
+            onTap: () {},
+          ),
+          const SizedBox(height: FgSpace.s3),
+          FgListCard(
+            leading: const IconTile(FgIcons.tasks, tone: FgTone.good),
+            title: 'FG-SO-000005',
+            subtitle: 'PW-1003',
+            trailing: StatusPill.order('QualityCheck'),
+            onTap: () {},
+          ),
+          const SizedBox(height: FgSpace.s3),
+          Row(children: [
+            for (final l in ['Book', 'Inspection', 'Fuel', 'Pool']) ...[
+              Expanded(child: FgQuickAction(icon: FgIcons.tasks, label: l, onTap: () {})),
+              if (l != 'Pool') const SizedBox(width: FgSpace.s2),
+            ],
+          ]),
+          const SizedBox(height: FgSpace.s3),
+          Row(children: [
+            Expanded(child: OutlinedButton(onPressed: () {}, child: const FgFitLabel('Decline'))),
+            const SizedBox(width: FgSpace.s2),
+            Expanded(child: OutlinedButton(onPressed: () {}, child: const FgFitLabel('Other time'))),
+            const SizedBox(width: FgSpace.s2),
+            Expanded(child: FilledButton(onPressed: () {}, child: const FgFitLabel('Confirm'))),
+          ]),
+          const SizedBox(height: FgSpace.s3),
+          SectionCard(title: 'Handover history', icon: FgIcons.history, children: [
+            FgTimeline(showDate: true, entries: [
+              FgTimelineEntry(title: 'Customer → Gate', subtitle: 'HO-000007 · Qurtoba workshop · New Driver 029805 (Test)', time: DateTime(2026, 11, 13, 22, 15), trailing: const StatusPill('Accepted', dense: true), tone: FgTone.good),
+              FgTimelineEntry(title: 'Gate → Reception', subtitle: 'HO-000008 · Service advisor (PW)', time: DateTime(2026, 11, 13, 22, 20), trailing: const StatusPill('Accepted', dense: true), tone: FgTone.good),
+            ]),
+          ]),
+        ]),
+      ),
+    );
+  });
+
   testWidgets('sign-in when the server cannot be reached', tags: 'gallery', (tester) async {
     await shot(tester, 'signin', () => const SizedBox(height: 1700, child: DevSignInScreen(title: 'Fleet Geeks Workshop', portal: 'workshop')));
   });

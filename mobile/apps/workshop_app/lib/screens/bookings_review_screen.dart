@@ -109,9 +109,9 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
       child: Padding(
         padding: const EdgeInsets.all(FgSpace.s4),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Row(children: [
-            if (b.s('plate').isNotEmpty) ...[PlateBadge(b.s('plate')), const SizedBox(width: FgSpace.s2)],
-            Expanded(child: Text(b.s('appointmentId'), style: context.tt.labelMedium?.copyWith(fontFeatures: FgFonts.tabular))),
+          Wrap(spacing: FgSpace.s2, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            if (b.s('plate').isNotEmpty) PlateBadge(b.s('plate')),
+            Text(b.s('appointmentId'), maxLines: 1, softWrap: false, style: context.tt.labelMedium?.copyWith(fontFeatures: FgFonts.tabular)),
             StatusPill(status, dense: true),
           ]),
           const SizedBox(height: FgSpace.s2),
@@ -144,21 +144,21 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: _busy ? null : _decline,
-                  child: Text(s.t('decline')),
+                  child: FgFitLabel(s.t('decline')),
                 ),
               ),
               const SizedBox(width: FgSpace.s2),
               Expanded(
                 child: OutlinedButton(
                   onPressed: _busy ? null : _reschedule,
-                  child: Text(s.t('proposeTime')),
+                  child: FgFitLabel(s.t('proposeTime')),
                 ),
               ),
               const SizedBox(width: FgSpace.s2),
               Expanded(
                 child: FilledButton(
                   onPressed: _busy ? null : () => _decide('confirm', const <String, Object?>{}, s.t('bookingConfirmedDone')),
-                  child: Text(s.t('confirm')),
+                  child: FgFitLabel(s.t('confirm')),
                 ),
               ),
             ]),

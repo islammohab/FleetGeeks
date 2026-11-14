@@ -120,7 +120,11 @@ class FgQuickAction extends StatelessWidget {
                 child: Icon(icon, color: c.fg, size: 22),
               ),
               const SizedBox(height: FgSpace.s2),
-              Text(label, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis, style: context.tt.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
+              // one line that shrinks to fit: a word is never broken in the middle
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(label, maxLines: 1, softWrap: false, textAlign: TextAlign.center, style: context.tt.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
+              ),
             ]),
           ),
         ),
@@ -161,3 +165,16 @@ class FgMenuTile extends StatelessWidget {
     );
   }
 }
+
+/// Button label on one line that shrinks to fit a narrow button instead of breaking a word ("Confir / m").
+class FgFitLabel extends StatelessWidget {
+  const FgFitLabel(this.text, {super.key});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => FittedBox(fit: BoxFit.scaleDown, child: Text(text, maxLines: 1, softWrap: false));
+}
+
+/// App-wide frame: follows the phone's font size setting up to 115 %, so very large system fonts cannot break the layouts.
+Widget fgAppFrame(BuildContext context, Widget? child) =>
+    MediaQuery.withClampedTextScaling(minScaleFactor: 0.9, maxScaleFactor: 1.15, child: child ?? const SizedBox.shrink());

@@ -120,6 +120,7 @@ class CustomerApp extends ConsumerWidget {
       return MaterialApp(
         title: s.t('appCustomer'),
         debugShowCheckedModeBanner: false,
+        builder: fgAppFrame,
         theme: light,
         darkTheme: dark,
         locale: locale,
@@ -135,6 +136,7 @@ class CustomerApp extends ConsumerWidget {
     return MaterialApp.router(
       title: s.t('appCustomer'),
       debugShowCheckedModeBanner: false,
+        builder: fgAppFrame,
       theme: light,
       darkTheme: dark,
       locale: locale,
