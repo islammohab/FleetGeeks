@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 /// Renders shared widgets to PNG files (test/gallery/*.png) with the real fonts, in English and Arabic, light and dark.
 /// Run with `flutter test --update-goldens --tags gallery test/gallery_test.dart`; the build publishes the pictures so the
@@ -62,7 +63,10 @@ Widget _frame(Widget child, {required String lang, required Brightness brightnes
     );
 
 void main() {
-  setUpAll(_loadFonts);
+  setUpAll(() async {
+    await initializeDateFormatting();
+    await _loadFonts();
+  });
 
   Future<void> shot(WidgetTester tester, String name, Widget Function() build) async {
     for (final lang in ['en', 'ar']) {
@@ -150,7 +154,18 @@ void main() {
             const SizedBox(width: FgSpace.s2),
             Expanded(child: FilledButton(onPressed: () {}, child: const FgFitLabel('Confirm'))),
           ]),
-          const SizedBox(height: FgSpace.s3),
+        ]),
+      ),
+    );
+  });
+
+  testWidgets('timeline at a very large system font (130 %)', tags: 'gallery', (tester) async {
+    await shot(
+      tester,
+      'timeline_large_font',
+      () => MediaQuery(
+        data: const MediaQueryData(size: Size(360, 2000), textScaler: TextScaler.linear(1.3)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           SectionCard(title: 'Handover history', icon: FgIcons.history, children: [
             FgTimeline(showDate: true, entries: [
               FgTimelineEntry(title: 'Customer → Gate', subtitle: 'HO-000007 · Qurtoba workshop · New Driver 029805 (Test)', time: DateTime(2026, 11, 13, 22, 15), trailing: const StatusPill('Accepted', dense: true), tone: FgTone.good),
