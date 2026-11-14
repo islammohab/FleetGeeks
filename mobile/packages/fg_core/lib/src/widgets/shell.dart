@@ -295,7 +295,11 @@ class _DevSignInScreenState extends ConsumerState<DevSignInScreen> {
               label: Text(s.t('retry')),
             ),
           ] else if (FgConfig.devSignIn) ...[
-          FgNotice(tone: FgTone.attention, title: '${s.t('devSignIn')} · ${FgConfig.environment}', message: s.t('devSignInNote')),
+          FgNotice(
+            tone: FgTone.attention,
+            title: FgConfig.environment == 'Development' ? s.t('devSignIn') : '${s.t('devSignIn')} · ${FgConfig.environment}',
+            message: s.t('devSignInNote'),
+          ),
           const SizedBox(height: FgSpace.s4),
           Row(children: [
             Expanded(child: Text(s.t('portalUser'), style: context.tt.titleSmall)),

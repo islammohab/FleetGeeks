@@ -71,6 +71,9 @@ void main() {
         tester.view.devicePixelRatio = 3;
         addTearDown(tester.view.reset);
         await tester.pumpWidget(_frame(build(), lang: lang, brightness: brightness));
+        // let real async work (the failing server call of the sign-in) finish before the picture is taken
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 400)));
+        await tester.pump(const Duration(milliseconds: 300));
         await tester.pump(const Duration(milliseconds: 300));
         await expectLater(find.byType(MaterialApp), matchesGoldenFile('gallery/${name}_${lang}_${brightness.name}.png'));
       }

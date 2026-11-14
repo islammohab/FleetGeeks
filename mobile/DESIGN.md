@@ -149,3 +149,19 @@ features, actions, statuses (`FgIcons.status`), vehicle classes (`FgIcons.vehicl
 | `packages/fg_core/fonts/` | Inter, IBM Plex Sans Arabic (+ OFL licence texts) |
 | `assets/brand/` | logo / icon / splash SVG sources, `png/` renders, `android/` vector adaptive icons |
 | `tools/check_i18n.ps1`, `tools/get_fonts.ps1`, `tools/render_brand.ps1`, `tools/apply_vector_icons.ps1` | checks and asset tooling |
+
+## Labels and guidance (1.3.0)
+
+- **One vocabulary with the portals.** A field, button or status has the same words in D365, the portals and the apps. When the
+  portal wording changes, change `packages/fg_core/lib/src/i18n.dart` to match (`web/packages/shared/src/strings.ts` is the reference).
+- Sentence case, no trailing colon, buttons are verbs, messages say what happened and what to do next, and are never cut with "…".
+- Status symbols are shown through `Strings.status` / `statusLabel`: a sentence ("Partially approved"), with fixed texts in
+  `statusEn` where the D365 name reads badly. A missing key falls back to readable words, never the key name.
+- `test/labels_test.dart` fails when a key used in the code has no English or Arabic text.
+- `NextStepCard(status)` tells workshop staff what has to happen now and who does it (keys `wsNext<Step>`, `actor<Role>`).
+- `KeyValueRow` puts a value longer than 26 characters under its label instead of squeezing it beside it.
+- Sign-in shows one message at a time. When the server cannot be reached it explains how to connect and offers Try again;
+  it never offers a built-in user list. The server dialog can read the address from a QR code.
+- `test/gallery_test.dart` renders shared widgets and the sign-in to PNG (EN / AR, light / dark); the build publishes them as
+  `widget-gallery.zip` with every release so the look can be reviewed without a phone.
+
