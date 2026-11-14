@@ -152,6 +152,11 @@ class OrderScreen extends ConsumerWidget {
                   const SizedBox(height: FgSpace.s3),
                   _PaymentCard(orderId: orderId, order: o),
                 ],
+                // feedback after the vehicle left: stars and a comment, stored in D365 (After-service > Feedback)
+                if (const {'Released', 'Closed'}.contains(status)) ...[
+                  const SizedBox(height: FgSpace.s3),
+                  _FeedbackCard(orderId: orderId),
+                ],
                 const SizedBox(height: FgSpace.s3),
                 SectionCard(
                   title: s.t('progress'),
@@ -282,6 +287,97 @@ class _AcceptWorkCardState extends ConsumerState<_AcceptWorkCard> {
           onPressed: _busy ? null : _accept,
           icon: _busy ? SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.fg.onAction)) : const Icon(FgIcons.check, size: 18),
           label: Text(s.t('acceptWork')),
+        ),
+      ],
+    );
+  }
+}
+
+/// Star rating (1-5) and a comment on a released order: POST /service-orders/{id}/feedback {rating, comment}, the same
+/// call as the Customer Portal. D365 opens a complaint for a rating of 2 or less.
+class _FeedbackCard extends ConsumerStatefulWidget {
+  const _FeedbackCard({required this.orderId});
+  final String orderId;
+
+  @override
+  ConsumerState<_FeedbackCard> createState() => _FeedbackCardState();
+}
+
+class _FeedbackCardState extends ConsumerState<_FeedbackCard> {
+  final _comment = TextEditingController();
+  int _rating = 0;
+  bool _busy = false;
+  bool _sent = false;
+
+  @override
+  void dispose() {
+    _comment.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final s = ref.read(stringsProvider);
+    setState(() => _busy = true);
+    try {
+      await ref.read(apiProvider).post(
+            '/service-orders/${Uri.encodeComponent(widget.orderId)}/feedback',
+            body: {'rating': _rating, 'comment': _comment.text.trim()},
+            idempotencyKey: const Uuid().v4(),
+          );
+      if (mounted) {
+        setState(() => _sent = true);
+        showDone(context, s.t('feedbackThanks'));
+      }
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
+    final fg = context.fg;
+    if (_sent) {
+      return SectionCard(title: s.t('feedback'), icon: FgIcons.star, children: [FgNotice(tone: FgTone.good, message: s.t('feedbackThanks'))]);
+    }
+    return SectionCard(
+      title: s.t('feedback'),
+      icon: FgIcons.star,
+      children: [
+        Text(s.t('feedbackHint'), style: context.tt.bodySmall),
+        const SizedBox(height: FgSpace.s2),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          for (var i = 1; i <= 5; i++)
+            IconButton(
+              tooltip: s.t('feedbackStars', [i]),
+              iconSize: 36,
+              onPressed: _busy
+                  ? null
+                  : () {
+                      FgHaptics.tap();
+                      setState(() => _rating = i);
+                    },
+              icon: Icon(FgIcons.star, color: i <= _rating ? fg.action : fg.border),
+            ),
+        ]),
+        const SizedBox(height: FgSpace.s2),
+        TextField(
+          controller: _comment,
+          enabled: !_busy,
+          minLines: 2,
+          maxLines: 5,
+          maxLength: 1000,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(labelText: s.t('feedbackComment')),
+        ),
+        const SizedBox(height: FgSpace.s2),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+          onPressed: _busy || _rating == 0 ? null : _send,
+          icon: _busy ? SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: fg.onAction)) : const Icon(FgIcons.send, size: 18),
+          label: Text(s.t('sendFeedback')),
         ),
       ],
     );
