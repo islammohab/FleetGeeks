@@ -32,7 +32,7 @@ class OrderCard extends ConsumerWidget {
       meta: promise == null || !open ? null : '${s.t('promise')}: ${fmtDate(promise, s.lang)} · ${promiseText(s, promise)}',
       trailing: unread > 0
           ? Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
-              StatusPill(status, dense: true),
+              StatusPill.order(status, dense: true),
               const SizedBox(height: FgSpace.s1),
               Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(FgIcons.messages, size: 14, color: context.fg.action),
@@ -40,7 +40,7 @@ class OrderCard extends ConsumerWidget {
                 Text('$unread', style: context.tt.labelMedium?.copyWith(color: context.fg.action, fontWeight: FontWeight.w700)),
               ]),
             ])
-          : StatusPill(status, dense: true),
+          : StatusPill.order(status, dense: true),
       footer: open ? OrderProgress(status: status, compact: true) : null,
       onTap: () => context.push('/orders/${Uri.encodeComponent(order.s('ServiceOrderId'))}'),
     );

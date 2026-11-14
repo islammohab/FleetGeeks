@@ -200,7 +200,7 @@ class _VehicleScreenState extends ConsumerState<VehicleScreen> {
                             time: o.d('ReleasedDateTime') ?? o.d('ArrivedDateTime') ?? o.d('CurrentPromise'),
                             icon: FgIcons.status(o.s('Status')),
                             tone: toneOf(o.s('Status')),
-                            trailing: StatusPill(o.s('Status'), dense: true),
+                            trailing: StatusPill.order(o.s('Status'), dense: true),
                             onTap: () => context.push('/orders/${Uri.encodeComponent(o.s('ServiceOrderId'))}'),
                           ),
                       ]),

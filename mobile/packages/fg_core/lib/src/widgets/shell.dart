@@ -7,7 +7,9 @@ import '../fg_icons.dart';
 import '../haptics.dart';
 import '../i18n.dart';
 import '../models.dart';
+import '../oidc.dart';
 import '../outbox.dart';
+import '../server_check.dart';
 import '../status.dart';
 import '../theme.dart';
 import 'illustrations.dart';
@@ -35,17 +37,18 @@ Future<bool> runCommand(BuildContext context, WidgetRef ref, Future<SubmitResult
     return true;
   } catch (e) {
     FgHaptics.warning();
-    messenger.showSnackBar(SnackBar(backgroundColor: danger, content: Text('$e', style: TextStyle(color: onDanger))));
+    messenger.showSnackBar(SnackBar(backgroundColor: danger, content: Text(s.error(e), style: TextStyle(color: onDanger))));
     return false;
   }
 }
 
-/// Snack bar for an error of a live (non-outbox) call.
+/// Snack bar for an error of a live (non-outbox) call. A step-order refusal (409 StepOrder) carries the "Step order" title.
 void showError(BuildContext context, Object error) {
   FgHaptics.warning();
   final fg = context.fg;
+  final s = ProviderScope.containerOf(context, listen: false).read(stringsProvider);
   ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(backgroundColor: fg.danger, content: Text('$error', style: TextStyle(color: context.isDark ? FgColors.n950 : FgColors.n0))),
+    SnackBar(backgroundColor: fg.danger, content: Text(s.error(error), style: TextStyle(color: context.isDark ? FgColors.n950 : FgColors.n0))),
   );
 }
 
@@ -61,7 +64,7 @@ List<Widget> commonActions(BuildContext context, WidgetRef ref, {VoidCallback? o
   return [
     if (openOutbox != null) OutboxButton(onPressed: openOutbox),
     IconButton(tooltip: s.t('language'), onPressed: () => ref.read(localeProvider.notifier).toggle(), icon: const Icon(FgIcons.language)),
-    IconButton(tooltip: s.t('signOut'), onPressed: () => ref.read(authProvider.notifier).signOut(), icon: const Icon(FgIcons.signOut)),
+    IconButton(tooltip: s.t('signOut'), onPressed: () => signOutChecked(context, ref), icon: const Icon(FgIcons.signOut)),
   ];
 }
 
@@ -186,25 +189,58 @@ Future<String?> pickLookup(BuildContext context, {required String title, require
   );
 }
 
-/// Development sign-in with the demo portal users (labelled; the API refuses it outside Development).
+/// D-111 / prompt 3 (C1): the active portal users of the company, read live from D365 for the development sign-in
+/// (GET /dev/users?portal=workshop|customer: id, label, type). It works without "Generate demo data" and reloads when the
+/// server address changes (the API client depends on it).
+final devUsersProvider = FutureProvider.autoDispose.family<List<FgRow>, String>(
+  (ref, portal) async => asRows(await ref.watch(apiProvider).get('/dev/users', query: {'portal': portal})).where((u) => u.s('id').isNotEmpty).toList(),
+);
+
+/// Development sign-in (labelled; the API refuses it outside Development). The list holds the active portal users of D365
+/// for this app ([portal] = workshop or customer); [fallbackUsers] are shown only when the API cannot be reached.
 class DevSignInScreen extends ConsumerStatefulWidget {
-  const DevSignInScreen({super.key, required this.title, required this.users, this.subtitle});
+  const DevSignInScreen({super.key, required this.title, required this.portal, this.fallbackUsers = const {}, this.subtitle});
   final String title;
   final String? subtitle;
-  final Map<String, String> users;
+
+  /// workshop (workshop staff and partners) or customer (customers, drivers, internal fleet).
+  final String portal;
+
+  /// Used only when the user list cannot be loaded from D365 (API unreachable).
+  final Map<String, String> fallbackUsers;
 
   @override
   ConsumerState<DevSignInScreen> createState() => _DevSignInScreenState();
 }
 
 class _DevSignInScreenState extends ConsumerState<DevSignInScreen> {
-  late String _user = widget.users.keys.first;
+  String? _user;
+  final _filter = TextEditingController();
+
+  @override
+  void dispose() {
+    _filter.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(stringsProvider);
     final auth = ref.watch(authProvider);
     final fg = context.fg;
+    final loaded = ref.watch(devUsersProvider(widget.portal));
+    final live = loaded.value;
+    // prompt 3 (C1): the fixed list only when the API cannot be reached; D365 without active users shows that message instead
+    final fallback = loaded.hasError;
+    final all = <MapEntry<String, String>>[
+      if (live != null && live.isNotEmpty)
+        for (final u in live) MapEntry(u.s('id'), u.s('label').isEmpty ? u.s('id') : u.s('label'))
+      else if (fallback)
+        ...widget.fallbackUsers.entries,
+    ];
+    final q = _filter.text.trim().toLowerCase();
+    final users = q.isEmpty ? all : all.where((e) => e.key.toLowerCase().contains(q) || e.value.toLowerCase().contains(q)).toList();
+    final selected = all.any((e) => e.key == _user) ? _user : (all.isEmpty ? null : all.first.key);
     return Scaffold(
       body: SafeArea(
         child: ListView(padding: const EdgeInsets.all(FgSpace.gutter), children: [
@@ -227,21 +263,57 @@ class _DevSignInScreenState extends ConsumerState<DevSignInScreen> {
             ]),
           ),
           const SizedBox(height: FgSpace.s4),
+          const _ServerAddressTile(),
+          const SizedBox(height: FgSpace.s4),
+          // D-110: production sign-in with the organisation's OpenID Connect provider (system browser, PKCE)
+          if (FgOidc.configured) ...[
+            FilledButton.icon(
+              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
+              onPressed: auth.isLoading ? null : () => ref.read(authProvider.notifier).signInOidc(),
+              icon: const Icon(FgIcons.signIn, size: 20),
+              label: Text(s.t('signIn')),
+            ),
+            if (auth.hasError && !FgConfig.devSignIn) Padding(padding: const EdgeInsets.all(FgSpace.s2), child: ErrorText(auth.error!)),
+            const SizedBox(height: FgSpace.s4),
+          ],
+          if (FgConfig.devSignIn) ...[
           FgNotice(tone: FgTone.attention, title: '${s.t('devSignIn')} · ${FgConfig.environment}', message: s.t('devSignInNote')),
           const SizedBox(height: FgSpace.s4),
-          Text(s.t('portalUser'), style: context.tt.titleSmall),
+          Row(children: [
+            Expanded(child: Text(s.t('portalUser'), style: context.tt.titleSmall)),
+            IconButton(
+              tooltip: s.t('refresh'),
+              onPressed: () => ref.invalidate(devUsersProvider(widget.portal)),
+              icon: const Icon(FgIcons.refresh, size: 20),
+            ),
+          ]),
+          Text(s.t(fallback ? 'devUsersFallback' : 'devUsersLive'), style: context.tt.bodySmall),
           const SizedBox(height: FgSpace.s2),
-          for (final entry in widget.users.entries)
+          if (loaded.isLoading && live == null) const LinearProgressIndicator(),
+          if (fallback && loaded.hasError) ...[
+            FgNotice(tone: FgTone.attention, message: s.error(loaded.error!)),
+            const SizedBox(height: FgSpace.s2),
+          ],
+          if (all.length > 6) ...[
+            TextField(
+              controller: _filter,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(labelText: s.t('devUsersFilter'), prefixIcon: const Icon(FgIcons.search, size: 20)),
+            ),
+            const SizedBox(height: FgSpace.s2),
+          ],
+          if (!loaded.isLoading && all.isEmpty) Text(s.t('devUsersNone'), style: context.tt.bodySmall),
+          for (final entry in users)
             Padding(
               padding: const EdgeInsets.only(bottom: FgSpace.s2),
               child: Semantics(
-                selected: entry.key == _user,
+                selected: entry.key == selected,
                 button: true,
                 child: Material(
-                  color: entry.key == _user ? fg.primaryBg : fg.surface,
+                  color: entry.key == selected ? fg.primaryBg : fg.surface,
                   shape: RoundedRectangleBorder(
                     borderRadius: FgRadius.brLg,
-                    side: BorderSide(color: entry.key == _user ? fg.primary : fg.border, width: entry.key == _user ? 2 : 1),
+                    side: BorderSide(color: entry.key == selected ? fg.primary : fg.border, width: entry.key == selected ? 2 : 1),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: InkWell(
@@ -260,7 +332,7 @@ class _DevSignInScreenState extends ConsumerState<DevSignInScreen> {
                             Text(entry.key, style: context.tt.bodySmall),
                           ]),
                         ),
-                        if (entry.key == _user) Icon(FgIcons.good, color: fg.primary),
+                        if (entry.key == selected) Icon(FgIcons.good, color: fg.primary),
                       ]),
                     ),
                   ),
@@ -271,19 +343,133 @@ class _DevSignInScreenState extends ConsumerState<DevSignInScreen> {
           const SizedBox(height: FgSpace.s3),
           FilledButton.icon(
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
-            onPressed: auth.isLoading
+            onPressed: auth.isLoading || selected == null
                 ? null
                 : () {
                     FgHaptics.success();
-                    ref.read(authProvider.notifier).signInDev(_user);
+                    ref.read(authProvider.notifier).signInDev(selected);
                   },
             icon: auth.isLoading
                 ? SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: fg.onAction))
                 : const Icon(FgIcons.signIn, size: 20),
             label: Text(s.t('devSignIn')),
           ),
+          ],
         ]),
       ),
+    );
+  }
+}
+
+/// The Fleet Geeks server the app talks to; tap to change it (saved on the phone, so one APK works on any network).
+class _ServerAddressTile extends ConsumerWidget {
+  const _ServerAddressTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(stringsProvider);
+    final server = ref.watch(serverAddressProvider);
+    final fg = context.fg;
+    return Material(
+      color: fg.surface,
+      shape: RoundedRectangleBorder(borderRadius: FgRadius.brLg, side: BorderSide(color: fg.border)),
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        leading: const Icon(FgIcons.server),
+        title: Text(s.t('serverAddress')),
+        subtitle: Text(server, textDirection: TextDirection.ltr),
+        trailing: const Icon(FgIcons.settings, size: 18),
+        onTap: () => _edit(context, ref, server),
+      ),
+    );
+  }
+
+  Future<void> _edit(BuildContext context, WidgetRef ref, String current) async {
+    final s = ref.read(stringsProvider);
+    final connected = await showDialog<ServerCheck>(context: context, builder: (ctx) => _ServerDialog(current: current));
+    if (connected != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.t('serverConnected', [connected.company]))));
+    }
+  }
+}
+
+/// D-113: the address is checked before it is saved - the API address or a portal link, on the same Wi-Fi or published.
+class _ServerDialog extends ConsumerStatefulWidget {
+  const _ServerDialog({required this.current});
+  final String current;
+
+  @override
+  ConsumerState<_ServerDialog> createState() => _ServerDialogState();
+}
+
+class _ServerDialogState extends ConsumerState<_ServerDialog> {
+  late final TextEditingController _ctrl = TextEditingController(text: widget.current);
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _connect() async {
+    final s = ref.read(stringsProvider);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final found = await ref.read(serverAddressProvider.notifier).connect(_ctrl.text);
+      if (mounted) Navigator.pop(context, found);
+    } on ServerCheckException catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = s.t(e.reason == 'empty' ? 'serverEmpty' : (e.reason == 'notFleetGeeks' ? 'serverNotFleetGeeks' : 'serverUnreachable'));
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
+    return AlertDialog(
+      title: Text(s.t('serverAddress')),
+      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        TextField(
+          controller: _ctrl,
+          autofocus: true,
+          autocorrect: false,
+          enabled: !_busy,
+          keyboardType: TextInputType.url,
+          textDirection: TextDirection.ltr,
+          decoration: InputDecoration(helperText: s.t('serverAddressHint'), helperMaxLines: 4, errorText: _error, errorMaxLines: 5),
+          onSubmitted: (_) => _busy ? null : _connect(),
+        ),
+        if (_busy) ...[
+          const SizedBox(height: FgSpace.s3),
+          Row(children: [
+            const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(width: FgSpace.s2),
+            Text(s.t('serverChecking')),
+          ]),
+        ],
+      ]),
+      actions: [
+        TextButton(
+          onPressed: _busy
+              ? null
+              : () async {
+                  await ref.read(serverAddressProvider.notifier).set('');
+                  if (context.mounted) Navigator.pop(context);
+                },
+          child: Text(s.t('serverAddressReset')),
+        ),
+        TextButton(onPressed: _busy ? null : () => Navigator.pop(context), child: Text(s.t('cancel'))),
+        FilledButton(onPressed: _busy ? null : _connect, child: Text(s.t('serverConnect'))),
+      ],
     );
   }
 }
@@ -321,7 +507,7 @@ class NoAccessScreen extends ConsumerWidget {
           title: s.t('noAccess'),
           message: s.t('noAccessHint'),
           actionLabel: s.t('signOut'),
-          onAction: () => ref.read(authProvider.notifier).signOut(),
+          onAction: () => signOutChecked(context, ref),
         ),
       ),
     );

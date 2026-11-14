@@ -6,7 +6,8 @@ enum FgTone { neutral, info, progress, attention, good, bad }
 
 const Set<String> _good = {
   'Valid', 'Pass', 'Green', 'Sent', 'Available', 'Active', 'Approved', 'Completed', 'QCPassed', 'Released',
-  'ReadyForCollection', 'Accepted', 'Issued', 'Confirmed', 'Returned', 'NotDue', 'Paid', 'Delivered',
+  'ReadyForCollection', 'Accepted', 'Issued', 'Confirmed', 'Returned', 'NotDue', 'Paid', 'Delivered', 'ReadyForHandback',
+  'WorkAccepted', 'Closed',
 };
 const Set<String> _progress = {
   'InProgress', 'InDiagnosis', 'Received', 'Arrived', 'Booked', 'Reserved', 'Submitted', 'CheckedOut', 'Assigned',
@@ -35,26 +36,140 @@ FgTone toneOf(String symbol) {
   return FgTone.neutral;
 }
 
-/// The ten customer-facing stages of a service order, in order. Labels: i18n keys `stage<Key>`.
-const List<String> orderStages = [
-  'Requested', 'Confirmed', 'Arrived', 'Received', 'Diagnosis', 'AwaitingApproval', 'InProgress', 'QualityCheck',
-  'Ready', 'Released',
+/// Prompt 2 / 3 (B1): the one status model of a service order, owned by D365 (FGStatusService) and shared with both portals
+/// (web/packages/shared/src/flow.ts). The 16 steps in order, as D365 enum symbols of FGServiceOrderStatus. The enum names are
+/// kept; the labels changed: Draft = Requested, Booked = Confirmed, InDiagnosis = Diagnosis, ReadyForCollection = Billing cleared.
+const List<String> orderSteps = [
+  'Draft', 'Booked', 'Arrived', 'Received', 'InDiagnosis', 'AwaitingApproval', 'Approved', 'InProgress', 'AwaitingParts',
+  'QualityCheck', 'Rework', 'ReadyForHandback', 'WorkAccepted', 'ReadyForCollection', 'Released', 'Closed',
 ];
 
-/// Index in [orderStages] for a service order (or appointment) status; -1 for Cancelled / unknown.
-int orderStageIndex(String status) => switch (status) {
-      'Draft' || 'Requested' || 'Held' => 0,
-      'Booked' || 'Confirmed' => 1,
-      'Arrived' => 2,
-      'Received' => 3,
-      'InDiagnosis' => 4,
-      'AwaitingApproval' => 5,
-      'InProgress' || 'AwaitingParts' || 'Rework' => 6,
-      'QualityCheck' => 7,
-      'ReadyForCollection' => 8,
-      'Released' || 'Closed' => 9,
-      _ => -1,
+/// Steps shown only when the order reached them (side steps).
+const Set<String> orderSideSteps = {'AwaitingParts', 'Rework'};
+
+/// Label suffix of a step: i18n keys `st<Suffix>` (label) and `next<Suffix>` (what happens next).
+const Map<String, String> orderStepSuffix = {
+  'Draft': 'Requested', 'Booked': 'Confirmed', 'Arrived': 'Arrived', 'Received': 'Received', 'InDiagnosis': 'Diagnosis',
+  'AwaitingApproval': 'AwaitingApproval', 'Approved': 'Approved', 'InProgress': 'InProgress', 'AwaitingParts': 'AwaitingParts',
+  'QualityCheck': 'QualityCheck', 'Rework': 'Rework', 'ReadyForHandback': 'ReadyForHandback', 'WorkAccepted': 'WorkAccepted',
+  'ReadyForCollection': 'BillingCleared', 'Released': 'Released', 'Closed': 'Closed', 'Cancelled': 'Cancelled',
+};
+
+/// Position 1-16 of a service order status in the model; 0 for Cancelled / unknown. Appointment symbols (Requested, Held,
+/// Confirmed) map to steps 1 and 2.
+int orderStepNumber(String status) {
+  final alias = switch (status) { 'Requested' || 'Held' => 'Draft', 'Confirmed' => 'Booked', _ => status };
+  return orderSteps.indexOf(alias) + 1;
+}
+
+/// State of a step: done, current, locked (not reached) or skipped (not needed for this order).
+enum FlowState { done, current, locked, skipped }
+
+FlowState _flowState(String s) => switch (s) {
+      'done' => FlowState.done,
+      'current' => FlowState.current,
+      'skipped' => FlowState.skipped,
+      _ => FlowState.locked,
     };
+
+/// One step of the order flow (GET /service-orders/{id}/flow, or the `flow` member of the order detail).
+class FlowStep {
+  const FlowStep({required this.step, required this.status, required this.state, this.at, this.by = ''});
+  final int step;
+  final String status;
+  final FlowState state;
+  final DateTime? at;
+  final String by;
+}
+
+/// The step model of one order from D365: current status and step, the steps with who / when, the actions D365 allows now
+/// (the first is the expected next one) and the proposed promise.
+class OrderFlow {
+  const OrderFlow({required this.status, required this.step, required this.steps, this.allowed = const [], this.next = '', this.proposedPromise});
+  final String status;
+  final int step;
+  final List<FlowStep> steps;
+  final List<String> allowed;
+  final String next;
+  final DateTime? proposedPromise;
+
+  /// Reads the API JSON; null when absent or not a flow object (older API, D365 refused).
+  static OrderFlow? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final steps = <FlowStep>[];
+    for (final s in (json['steps'] is List ? json['steps'] as List : const [])) {
+      if (s is! Map) continue;
+      steps.add(FlowStep(
+        step: (s['step'] as num?)?.toInt() ?? 0,
+        status: '${s['status'] ?? ''}',
+        state: _flowState('${s['state'] ?? ''}'),
+        at: _date(s['at']),
+        by: '${s['by'] ?? ''}',
+      ));
+    }
+    if (steps.isEmpty && json['status'] == null) return null;
+    final actions = json['allowed'] is List
+        ? [for (final a in json['allowed'] as List) '$a']
+        : '${json['actions'] ?? ''}'.split(',').map((a) => a.trim()).where((a) => a.isNotEmpty).toList();
+    return OrderFlow(
+      status: '${json['status'] ?? ''}',
+      step: (json['step'] as num?)?.toInt() ?? orderStepNumber('${json['status'] ?? ''}'),
+      steps: steps,
+      allowed: actions,
+      next: '${json['next'] ?? (actions.isEmpty ? '' : actions.first)}',
+      proposedPromise: _date(json['proposedPromise']),
+    );
+  }
+
+  /// D365 allows the action now.
+  bool can(String action) => allowed.contains(action);
+}
+
+DateTime? _date(Object? v) {
+  if (v == null) return null;
+  final d = DateTime.tryParse('$v');
+  // the empty D365 date (1900-01-01) means "not reached"
+  return d == null || d.year <= 1900 ? null : d.toLocal();
+}
+
+/// Steps without D365 data (order loaded before the flow): states derived from the status alone.
+List<FlowStep> stepsFromStatus(String status) {
+  final current = orderStepNumber(status);
+  return [
+    for (var i = 0; i < orderSteps.length; i++)
+      FlowStep(step: i + 1, status: orderSteps[i], state: i + 1 < current ? FlowState.done : (i + 1 == current ? FlowState.current : FlowState.locked)),
+  ];
+}
+
+/// View of a step on the visible track.
+enum TrackView { done, current, upcoming, alert }
+
+/// The track both apps show (same rule as the portals): from D365 when available, otherwise from the status; side steps
+/// (awaiting parts, rework) only when reached, skipped steps left out.
+List<(FlowStep, TrackView)> trackSteps(OrderFlow? flow, String status) {
+  final cancelled = status == 'Cancelled';
+  final all = (flow != null && flow.steps.isNotEmpty) ? flow.steps : stepsFromStatus(status);
+  return [
+    for (final s in all)
+      if (s.state != FlowState.skipped && !(s.state == FlowState.locked && orderSideSteps.contains(s.status)))
+        (
+          s,
+          cancelled
+              ? TrackView.upcoming
+              : switch (s.state) {
+                  FlowState.done => TrackView.done,
+                  FlowState.current => orderSideSteps.contains(s.status)
+                      ? TrackView.alert
+                      : (s.status == 'Released' || s.status == 'Closed' ? TrackView.done : TrackView.current),
+                  _ => TrackView.upcoming,
+                },
+        ),
+  ];
+}
+
+/// An action is offered only when D365 allows it now; without flow data the app falls back to offering it (the API check
+/// stays the rule).
+bool flowAllows(OrderFlow? flow, String action) => flow == null || (flow.allowed.isEmpty && flow.steps.isEmpty) || flow.can(action);
 
 /// Open = still in the workshop flow (not released, closed or cancelled).
 bool isOrderOpen(String status) => !const {'Released', 'Closed', 'Cancelled'}.contains(status);

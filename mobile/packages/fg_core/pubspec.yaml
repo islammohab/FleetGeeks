@@ -1,5 +1,5 @@
 name: fg_core
-description: "Fleet Geeks shared mobile core - API client, sign-in, offline outbox, EN/AR text, design system (theme, icons, widgets)."
+description: Fleet Geeks shared mobile core - API client, sign-in, offline outbox, EN/AR text, design system (theme, icons, widgets).
 version: 1.1.0
 publish_to: none
 resolution: workspace
@@ -15,6 +15,9 @@ dependencies:
   http: ^1.4.0
   http_parser: ^4.1.0
   flutter_secure_storage: ^10.0.0
+  # AES-GCM for the offline queue (key in the platform secure storage)
+  cryptography: ^2.7.0
+  flutter_appauth: ^9.0.0
   sqflite: ^2.4.2
   path: ^1.9.0
   connectivity_plus: ^7.0.0

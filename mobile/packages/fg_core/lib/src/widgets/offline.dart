@@ -2,6 +2,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../auth.dart';
 import '../fg_icons.dart';
 import '../format.dart';
 import '../haptics.dart';
@@ -40,7 +41,7 @@ class OfflineBanner extends ConsumerWidget {
     final s = ref.watch(stringsProvider);
     final online = ref.watch(connectivityProvider).value ?? true;
     final items = ref.watch(outboxProvider).value ?? const <OutboxItem>[];
-    final failed = items.where((i) => i.failed).length;
+    final failed = items.where((i) => i.needsReview).length;
     final waiting = items.length - failed;
     final fg = context.fg;
 
@@ -93,7 +94,7 @@ class OutboxButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(stringsProvider);
     final items = ref.watch(outboxProvider).value ?? const <OutboxItem>[];
-    final failed = items.where((i) => i.failed).length;
+    final failed = items.where((i) => i.needsReview).length;
     final online = ref.watch(connectivityProvider).value ?? true;
     return IconButton(
       tooltip: '${s.t('outbox')} (${items.length})',
@@ -120,7 +121,7 @@ class OutboxScreen extends ConsumerWidget {
     final list = items.value ?? const <OutboxItem>[];
     return Scaffold(
       appBar: AppBar(title: Text(s.t('outbox'))),
-      bottomNavigationBar: list.where((i) => !i.failed).isEmpty
+      bottomNavigationBar: list.where((i) => !i.needsReview).isEmpty
           ? null
           : FgActionBar(children: [
               Expanded(
@@ -162,7 +163,16 @@ class _OutboxCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(stringsProvider);
-    final c = context.fg.tone(item.failed ? FgTone.bad : FgTone.attention);
+    final c = context.fg.tone(item.needsReview ? FgTone.bad : FgTone.attention);
+    // D-109: refused (business rule / revoked), conflict (the record changed on the server - review, no automatic merge),
+    // blocked (waits behind a refused or conflicting command on the same record)
+    final reason = item.conflict
+        ? '${s.t('outboxConflict')}: ${item.lastError ?? ''}'
+        : item.blocked
+            ? s.t('outboxBlocked')
+            : item.failed
+                ? '${s.t('failedCommand')}: ${item.lastError ?? ''}'
+                : '${s.t('waitingSince')} ${fmtDate(item.createdAt.toLocal(), s.lang)}';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(FgSpace.s4),
@@ -172,21 +182,22 @@ class _OutboxCard extends ConsumerWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(color: c.bg, borderRadius: FgRadius.brMd),
-              child: Icon(item.failed ? FgIcons.danger : FgIcons.waiting, color: c.fg, size: 20),
+              child: Icon(item.needsReview ? FgIcons.danger : FgIcons.waiting, color: c.fg, size: 20),
             ),
             const SizedBox(width: FgSpace.s3),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(item.label, style: context.tt.titleSmall),
                 const SizedBox(height: 2),
-                Text(
-                  item.failed ? '${s.t('failedCommand')}: ${item.lastError ?? ''}' : '${s.t('waitingSince')} ${fmtDate(item.createdAt.toLocal(), s.lang)}',
-                  style: context.tt.bodySmall?.copyWith(color: item.failed ? c.fg : null),
-                ),
+                Text(reason, style: context.tt.bodySmall?.copyWith(color: item.needsReview ? c.fg : null)),
+                if (item.conflict) ...[
+                  const SizedBox(height: 2),
+                  Text(s.t('outboxConflictText'), style: context.tt.bodySmall),
+                ],
               ]),
             ),
           ]),
-          if (item.failed) ...[
+          if (item.failed || item.conflict) ...[
             const SizedBox(height: FgSpace.s3),
             Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               TextButton.icon(
@@ -206,4 +217,26 @@ class _OutboxCard extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Sign-out with local-data cleanup (D-109): commands still waiting on this phone are deleted with their key, so the user
+/// confirms first when any are left.
+Future<void> signOutChecked(BuildContext context, WidgetRef ref) async {
+  final s = ref.read(stringsProvider);
+  final waiting = ref.read(outboxProvider).value?.length ?? 0;
+  if (waiting > 0) {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(s.t('signOut')),
+        content: Text(s.t('signOutQueued', [waiting])),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: Text(s.t('cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: Text(s.t('signOut'))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+  }
+  await ref.read(authProvider.notifier).signOut();
 }

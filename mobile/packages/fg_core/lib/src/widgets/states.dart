@@ -9,16 +9,17 @@ import '../theme.dart';
 import 'illustrations.dart';
 import 'skeleton.dart';
 
-/// Error message with the API correlation id (for support).
-class ErrorText extends StatelessWidget {
+/// Error message with the API correlation id (for support). A step-order refusal shows the "Step order" title.
+class ErrorText extends ConsumerWidget {
   const ErrorText(this.error, {super.key, this.textAlign = TextAlign.center});
   final Object error;
   final TextAlign textAlign;
 
   @override
-  Widget build(BuildContext context) {
-    final ref = error is ApiException ? (error as ApiException).correlationId : null;
-    return Text('$error${ref == null ? '' : '\n($ref)'}', style: context.tt.bodyMedium?.copyWith(color: context.fg.danger), textAlign: textAlign);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(stringsProvider);
+    final correlation = error is ApiException ? (error as ApiException).correlationId : null;
+    return Text('${s.error(error)}${correlation == null ? '' : '\n($correlation)'}', style: context.tt.bodyMedium?.copyWith(color: context.fg.danger), textAlign: textAlign);
   }
 }
 

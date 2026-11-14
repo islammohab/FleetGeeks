@@ -48,6 +48,10 @@ class JobScreen extends ConsumerWidget {
             final checklist = (tech || qc) && job.s('QCTemplate').isNotEmpty && status != 'QCPassed';
             final qcNow = qc && status == 'Completed';
             final promise = o.d('CurrentPromise');
+            // prompt 2 (4.10): Before photo to start, After photo to finish (D365 parameter, on by default)
+            final evidence = asRows(d['evidence']);
+            final before = jobPhotoCount(evidence, line, 'Before');
+            final after = jobPhotoCount(evidence, line, 'After');
             return ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(FgSpace.gutter, FgSpace.s2, FgSpace.gutter, FgSpace.s6),
@@ -82,10 +86,28 @@ class JobScreen extends ConsumerWidget {
                 const SizedBox(height: FgSpace.s4),
                 if (!tech && !qc) FgNotice(tone: FgTone.info, message: s.t('noJobRole')),
                 if (canStart) ...[
+                  FgBigButton(
+                    icon: before > 0 ? FgIcons.good : FgIcons.camera,
+                    label: s.t('beforePhoto'),
+                    caption: before > 0 ? s.t('photosTaken', [before]) : s.t('beforePhotoCaption'),
+                    kind: before > 0 ? FgButtonKind.neutral : FgButtonKind.primary,
+                    height: 72,
+                    onPressed: () => takeEvidencePhoto(context, ref, orderId, category: 'Before', jobLine: line),
+                  ),
+                  const SizedBox(height: FgSpace.s3),
                   FgBigButton(icon: FgIcons.start, label: s.t('start'), caption: s.t('startCaption'), height: 88, onPressed: () => jobCommand(context, ref, orderId, line, 'start')),
                   const SizedBox(height: FgSpace.s3),
                 ],
                 if (running) ...[
+                  FgBigButton(
+                    icon: after > 0 ? FgIcons.good : FgIcons.camera,
+                    label: s.t('afterPhoto'),
+                    caption: after > 0 ? s.t('photosTaken', [after]) : s.t('afterPhotoCaption'),
+                    kind: after > 0 ? FgButtonKind.neutral : FgButtonKind.primary,
+                    height: 72,
+                    onPressed: () => takeEvidencePhoto(context, ref, orderId, category: 'After', jobLine: line),
+                  ),
+                  const SizedBox(height: FgSpace.s3),
                   FgBigButton(icon: FgIcons.finish, label: s.t('finish'), caption: s.t('finishCaption'), height: 88, onPressed: () => jobCommand(context, ref, orderId, line, 'finish')),
                   const SizedBox(height: FgSpace.s3),
                   FgBigButton(icon: FgIcons.pause, label: s.t('pause'), caption: s.t('pauseCaption'), kind: FgButtonKind.neutral, height: 72, onPressed: () => jobPause(context, ref, orderId, line)),
@@ -115,7 +137,7 @@ class JobScreen extends ConsumerWidget {
                   label: s.t('photo'),
                   kind: FgButtonKind.neutral,
                   height: 64,
-                  onPressed: () => takeEvidencePhoto(context, ref, orderId),
+                  onPressed: () => takeEvidencePhoto(context, ref, orderId, jobLine: line),
                 ),
               ],
             );

@@ -18,10 +18,15 @@ import 'screens/usage_screen.dart';
 import 'screens/vehicle_screen.dart';
 import 'screens/vehicles_screen.dart';
 
-void main() => runApp(const ProviderScope(child: CustomerApp()));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await loadSavedServer();
+  runApp(const ProviderScope(child: CustomerApp()));
+}
 
-/// Demo customer-side users created by "Generate demo data" in D365.
-const demoUsers = {
+/// Prompt 3 (C1): the sign-in lists the active customer, driver and internal fleet users read from D365
+/// (GET /dev/users?portal=customer); this list is shown only when the API cannot be reached.
+const fallbackUsers = {
   'demo.admin@example.com': 'Customer admin (Demo)',
   'demo.driver@example.com': 'Driver (Demo)',
   'demo.fleetb@example.com': 'Fleet manager, customer B (Demo)',
@@ -42,6 +47,12 @@ Page<void> _tab(Widget child) => NoTransitionPage<void>(child: child);
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/',
+    // D-110: an incoming link (app link of the portal or fleetgeeks://) opens its screen; unknown links go home
+    redirect: (context, state) {
+      final uri = state.uri;
+      if (uri.scheme == 'fleetgeeks' || (uri.hasScheme && uri.scheme.startsWith('http'))) return FgDeepLinks.route(uri) ?? '/';
+      return null;
+    },
     routes: [
       ShellRoute(
         builder: (context, state, child) => HomeShell(location: state.uri.path, child: child),
@@ -66,6 +77,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/bookings/:id', builder: (context, state) => BookingScreen(appointmentId: state.pathParameters['id']!)),
       GoRoute(path: '/outbox', builder: (context, state) => const OutboxScreen()),
+      GoRoute(path: '/notifications', builder: (context, state) => NotificationsScreen(open: (context, route) => context.push(route))),
       GoRoute(path: '/usage', builder: (context, state) => UsageScreen(vehicleId: state.uri.queryParameters['vehicle'])),
       GoRoute(path: '/pool', builder: (context, state) => const PoolScreen()),
     ],
@@ -98,7 +110,7 @@ class CustomerApp extends ConsumerWidget {
         home: auth.isLoading && user == null
             ? const FgLoadingScreen()
             : user == null
-                ? DevSignInScreen(title: s.t('appCustomer'), users: demoUsers)
+                ? DevSignInScreen(title: s.t('appCustomer'), portal: 'customer', fallbackUsers: fallbackUsers)
                 : NoAccessScreen(title: s.t('appCustomer')),
       );
     }

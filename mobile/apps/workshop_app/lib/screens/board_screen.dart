@@ -250,7 +250,7 @@ class BoardCard extends ConsumerWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Expanded(child: Text(id, style: context.tt.titleSmall?.copyWith(fontFeatures: FgFonts.tabular), maxLines: 1, overflow: TextOverflow.ellipsis)),
-              if (row.s('Status').isNotEmpty) StatusPill(row.s('Status'), dense: true),
+              if (row.s('Status').isNotEmpty) row.s('ServiceOrderId').isNotEmpty ? StatusPill.order(row.s('Status'), dense: true) : StatusPill(row.s('Status'), dense: true),
             ]),
             const SizedBox(height: FgSpace.s1),
             Row(children: [

@@ -108,6 +108,28 @@ FGPortalUserRole) decides what the person can see and do.
 
 ## Status
 
-The source was written without a Flutter toolchain on the D365 VM (by request), so it has **not been compiled or run yet**.
-Run `flutter analyze` and `flutter test packages/fg_core` first on the build machine; please send any analyzer output back so it can
-be fixed. The API endpoints the apps call are covered by `tests/api/api-live.ps1` against live D365.
+2026-11-14: both apps compile (`flutter analyze` 0 errors / 0 warnings, `flutter test packages/fg_core` 24 passed) and release
+APKs were built with Flutter 3.47 (debug-signed, for side-loading). The API endpoints the apps call are covered by
+`tests/api/api-live.ps1` against live D365.
+
+**Server address on the phone.** The sign-in screen shows *Fleet Geeks server*; tap it to enter the API address (saved on the
+phone; *Use the default* goes back to the `FG_API` build value). One APK therefore works on any network.
+
+## Production sign-in, deep links and offline photos (D-110)
+
+**OpenID Connect.** Build with the provider settings; the sign-in screen then offers *Sign in* (system browser, authorization code + PKCE). Tokens are kept in the platform secure storage and refreshed silently; *Sign out* ends the provider session.
+
+```
+flutter build apk --dart-define=FG_API=https://api.example.com --dart-define=FG_DEV_SIGNIN=false \
+  --dart-define=FG_OIDC_ISSUER=https://<tenant>.ciamlogin.com/<tenant-id>/v2.0 \
+  --dart-define=FG_OIDC_CLIENT_ID=<app client id> \
+  --dart-define=FG_OIDC_REDIRECT=com.fleetgeeks.customer:/oauth2redirect \
+  --dart-define=FG_OIDC_SCOPES="openid profile offline_access api://<api app id>/access"
+```
+
+After `flutter create .` generates the Android project, add the redirect scheme to `android/app/build.gradle(.kts)`:
+`defaultConfig { manifestPlaceholders["appAuthRedirectScheme"] = "com.fleetgeeks.customer" }` (workshop app: `com.fleetgeeks.workshop`). Register the same redirect URI on the app registration.
+
+**Deep links.** Notifications (More > Notifications) open their record. Portal links (`https://<portal>/orders/...`, `/bookings/...`, `/vehicles/...`) and `fleetgeeks://orders/...` open the same screen when Android app links are set up: add an intent filter for the portal host (autoVerify) and the `fleetgeeks` scheme to `AndroidManifest.xml`, publish `/.well-known/assetlinks.json` on the portal host, and keep `flutter_deeplinking_enabled` = true. Unknown paths open the home screen; the API still checks every record against the user's scope.
+
+**Offline photos.** A photo taken without a connection is kept encrypted (AES-GCM, key in the Android Keystore) in the app's private folder, queued with its Idempotency-Key and uploaded in order when the network returns; it is deleted after upload, on discard and on sign-out.

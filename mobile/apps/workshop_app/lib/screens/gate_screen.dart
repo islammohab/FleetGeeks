@@ -153,7 +153,7 @@ class _GateScreenState extends ConsumerState<GateScreen> {
         final order = asRow(r['order']);
         _message = r.s('outcome') == 'Admitted'
             ? s.t('admitted', [order.s('serviceOrderId')])
-            : s.t('alreadyAdmitted', [order.s('serviceOrderId'), s.status(order.s('status'))]);
+            : s.t('alreadyAdmitted', [order.s('serviceOrderId'), s.orderStatus(order.s('status'))]);
         _orderId = order.s('serviceOrderId');
         _error = false;
         FgHaptics.success();

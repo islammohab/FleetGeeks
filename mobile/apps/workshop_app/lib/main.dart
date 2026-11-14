@@ -14,10 +14,15 @@ import 'screens/order_screen.dart';
 import 'screens/parts_screen.dart';
 import 'screens/tasks_screen.dart';
 
-void main() => runApp(const ProviderScope(child: WorkshopApp()));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await loadSavedServer();
+  runApp(const ProviderScope(child: WorkshopApp()));
+}
 
-/// Demo workshop users created by "Generate demo data" in D365.
-const demoUsers = {
+/// Prompt 3 (C1): the sign-in lists the active workshop users read from D365 (GET /dev/users?portal=workshop); this list
+/// is shown only when the API cannot be reached.
+const fallbackUsers = {
   'demo.advisor@example.com': 'Service advisor + gate (Demo)',
   'demo.tech@example.com': 'Technician + QC + stores (Demo)',
 };
@@ -83,7 +88,7 @@ class WorkshopApp extends ConsumerWidget {
         home: auth.isLoading && user == null
             ? const FgLoadingScreen()
             : user == null
-                ? DevSignInScreen(title: s.t('appWorkshop'), subtitle: s.t('workshopTagline'), users: demoUsers)
+                ? DevSignInScreen(title: s.t('appWorkshop'), subtitle: s.t('workshopTagline'), portal: 'workshop', fallbackUsers: fallbackUsers)
                 : NoAccessScreen(title: s.t('appWorkshop')),
       );
     }

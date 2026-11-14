@@ -20,6 +20,7 @@ class FgIcons {
   static const parts = LucideIcons.package;
   static const mobility = LucideIcons.truck;
   static const outbox = LucideIcons.cloudUpload;
+  static const notifications = LucideIcons.bell;
 
   // Features
   static const inspection = LucideIcons.clipboardCheck;
@@ -70,6 +71,7 @@ class FgIcons {
   static const signOut = LucideIcons.logOut;
   static const signIn = LucideIcons.logIn;
   static const settings = LucideIcons.settings;
+  static const server = LucideIcons.server;
   static const info = LucideIcons.info;
   static const route = LucideIcons.route;
   static const release = LucideIcons.logOut;

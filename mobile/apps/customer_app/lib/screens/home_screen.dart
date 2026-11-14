@@ -9,7 +9,10 @@ import 'vehicles_screen.dart';
 
 /// One "needs your action" row.
 class _Action {
-  const _Action({required this.title, required this.subtitle, required this.icon, required this.tone, required this.onTap, this.status = ''});
+  const _Action({required this.title, required this.subtitle, required this.icon, required this.tone, required this.onTap, this.status = '', this.order = false});
+
+  /// [status] is a service order status (16-step labels).
+  final bool order;
   final String title;
   final String subtitle;
   final IconData icon;
@@ -39,9 +42,11 @@ class HomeScreen extends ConsumerWidget {
     final docs = compliance.value;
     final open = os?.where((o) => isOrderOpen(o.s('Status'))).toList();
     final awaiting = os?.where((o) => o.s('Status') == 'AwaitingApproval').toList() ?? const <FgRow>[];
+    // prompt 2 / 3: step 12 (ready for handback) waits for the customer's acceptance; step 14 (billing cleared) can be collected
+    final toAccept = os?.where((o) => o.s('Status') == 'ReadyForHandback').toList() ?? const <FgRow>[];
     final ready = os?.where((o) => o.s('Status') == 'ReadyForCollection').toList() ?? const <FgRow>[];
     final expiring = docs?.where((d) => d.s('Status') == 'Expired' || d.s('Status') == 'DueSoon').toList() ?? const <FgRow>[];
-    final failed = outbox.where((i) => i.failed).length;
+    final failed = outbox.where((i) => i.needsReview).length;
     String count(List<Object?>? list) => list == null ? '—' : fmtNum(list.length);
 
     final actions = <_Action>[
@@ -61,6 +66,17 @@ class HomeScreen extends ConsumerWidget {
           icon: FgIcons.estimate,
           tone: FgTone.attention,
           status: o.s('Status'),
+          order: true,
+          onTap: () => context.push('/orders/${Uri.encodeComponent(o.s('ServiceOrderId'))}'),
+        ),
+      for (final o in toAccept)
+        _Action(
+          title: s.t('actionAcceptWork', [o.s('ServiceOrderId')]),
+          subtitle: plates[o.s('VehicleId')] ?? o.s('VehicleId'),
+          icon: FgIcons.approve,
+          tone: FgTone.attention,
+          status: o.s('Status'),
+          order: true,
           onTap: () => context.push('/orders/${Uri.encodeComponent(o.s('ServiceOrderId'))}'),
         ),
       for (final o in ready)
@@ -70,6 +86,7 @@ class HomeScreen extends ConsumerWidget {
           icon: FgIcons.event('ready'),
           tone: FgTone.good,
           status: o.s('Status'),
+          order: true,
           onTap: () => context.push('/orders/${Uri.encodeComponent(o.s('ServiceOrderId'))}'),
         ),
       for (final d in expiring)
@@ -198,7 +215,7 @@ class HomeScreen extends ConsumerWidget {
                   leading: IconTile(a.icon, tone: a.tone),
                   title: a.title,
                   subtitle: a.subtitle,
-                  trailing: a.status.isEmpty ? null : StatusPill(a.status, dense: true),
+                  trailing: a.status.isEmpty ? null : (a.order ? StatusPill.order(a.status, dense: true) : StatusPill(a.status, dense: true)),
                   onTap: a.onTap,
                 ),
                 const SizedBox(height: FgSpace.s2),

@@ -18,7 +18,8 @@ Future<void> jobCommand(BuildContext context, WidgetRef ref, String orderId, Str
     ref,
     () => ref.read(outboxProvider.notifier).submit(
           '/workshop/jobs/${Uri.encodeComponent(orderId)}/$line/$verb',
-          body: {'commandId': const Uuid().v4(), 'pauseReason': reason},
+          // the tap time travels with the command: replayed after a period offline, the job time is the real one (D-110)
+          body: {'commandId': const Uuid().v4(), 'pauseReason': reason, 'capturedAtUtc': DateTime.now().toUtc().toIso8601String()},
           label: '${s.t(verb)} · $orderId / $line',
         ),
   );
@@ -66,9 +67,15 @@ Future<void> openChecklist(BuildContext context, String orderId, int line, Strin
 /// Evidence categories offered by the camera flow (FGEvidenceCategory).
 const evidenceCategories = ['Reception', 'Before', 'After', 'Damage', 'Diagnosis', 'QC'];
 
+/// Prompt 2 (4.10) / 3 (B2): number of photos of a category (Before / After) taken for one job line.
+int jobPhotoCount(List<FgRow> evidence, String line, String category) =>
+    evidence.where((e) => e.s('Category') == category && e.n('JobLineNum').round().toString() == line).length;
+
 /// Camera-first evidence: choose the category (default "Before", as before the redesign), take the photo, upload it.
-/// Uploads need the network (the file goes to storage); the screen says so when it fails.
-Future<void> takeEvidencePhoto(BuildContext context, WidgetRef ref, String orderId, {String? category}) async {
+/// With [jobLine] the photo belongs to that job (a job starts only with a Before photo and finishes only with an After
+/// photo when the D365 parameter requires it). Without a network the photo waits in the offline queue (D-110), ahead of
+/// the start / finish command queued after it.
+Future<void> takeEvidencePhoto(BuildContext context, WidgetRef ref, String orderId, {String? category, String? jobLine}) async {
   final s = ref.read(stringsProvider);
   var chosen = category;
   if (chosen == null) {
@@ -83,17 +90,19 @@ Future<void> takeEvidencePhoto(BuildContext context, WidgetRef ref, String order
   final shot = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 80, maxWidth: 2400);
   if (shot == null) return;
   try {
-    await ref.read(apiProvider).upload('/evidence', filePath: shot.path, contentType: 'image/jpeg', fields: {
+    // D-110: without a connection the photo is kept (encrypted) in the offline queue and uploaded when the network returns
+    final result = await ref.read(outboxProvider.notifier).submitUpload('/evidence', filePath: shot.path, contentType: 'image/jpeg', fields: {
       'serviceOrderId': orderId,
       'category': chosen,
       'customerVisible': 'true',
-    });
+      'jobLineNum': ?jobLine,
+    }, label: '${s.t('photo')} · $orderId${jobLine == null ? '' : ' / $jobLine'}');
     FgHaptics.success();
-    messenger.showSnackBar(SnackBar(content: Text(s.t('uploaded'))));
+    messenger.showSnackBar(SnackBar(content: Text(result.outcome == SubmitOutcome.queued ? s.t('photoQueued') : s.t('uploaded'))));
     ref.invalidate(orderProvider(orderId));
   } catch (e) {
     FgHaptics.warning();
-    messenger.showSnackBar(SnackBar(backgroundColor: danger, content: Text('$e')));
+    messenger.showSnackBar(SnackBar(backgroundColor: danger, content: Text(s.error(e))));
   }
 }
 

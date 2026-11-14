@@ -131,67 +131,85 @@ class FgTimeline extends ConsumerWidget {
   }
 }
 
-/// The ten-stage service order tracker (Requested → … → Released) with known timestamps and "what happens next".
+/// The service order tracker of the 16-step status model (Requested → … → Closed), the same as both portals and D365:
+/// the step states, who did each step and when come from D365 ([flow], GET /service-orders/{id}/flow or the `flow` member
+/// of the order detail); without it the states are derived from [status]. Side steps (awaiting parts, rework) are shown
+/// only when reached; the current step says what happens next.
 class OrderProgress extends ConsumerWidget {
-  const OrderProgress({super.key, required this.status, this.times = const {}, this.compact = false});
+  const OrderProgress({super.key, required this.status, this.flow, this.times = const {}, this.compact = false});
 
   /// Service order status symbol (D365).
   final String status;
 
-  /// Known timestamps per stage key of [orderStages] (for example Arrived → ArrivedDateTime).
+  /// The order's step model from D365 (null = derive from [status]).
+  final OrderFlow? flow;
+
+  /// Known timestamps per status symbol when D365 sent no flow (for example Arrived → ArrivedDateTime).
   final Map<String, DateTime?> times;
 
-  /// Only the bar and the current stage (list cards).
+  /// Only the bar and the current step (list cards).
   final bool compact;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(stringsProvider);
     final fg = context.fg;
-    final index = orderStageIndex(status);
     final cancelled = status == 'Cancelled';
+    final track = trackSteps(flow, status);
+    final currentIndex = track.indexWhere((t) => t.$2 == TrackView.current || t.$2 == TrackView.alert);
+    final number = flow?.step ?? orderStepNumber(status);
+    Color barColor(TrackView v) => cancelled
+        ? fg.border
+        : switch (v) {
+            TrackView.done => fg.primary,
+            TrackView.current => fg.action,
+            TrackView.alert => fg.danger,
+            TrackView.upcoming => fg.surface2,
+          };
     final bar = Semantics(
-      label: index < 0 ? s.status(status) : s.t('stepOf', [index + 1, orderStages.length]),
+      label: cancelled || number <= 0 ? s.orderStatus(status) : s.t('flowStepOf', [number, orderSteps.length]),
       child: Row(children: [
-        for (var i = 0; i < orderStages.length; i++) ...[
+        for (var i = 0; i < track.length; i++) ...[
           Expanded(
             child: AnimatedContainer(
               duration: FgMotion.base,
               height: 6,
-              decoration: BoxDecoration(
-                color: cancelled ? fg.border : (i < index ? fg.primary : (i == index ? fg.action : fg.surface2)),
-                borderRadius: FgRadius.brPill,
-              ),
+              decoration: BoxDecoration(color: barColor(track[i].$2), borderRadius: FgRadius.brPill),
             ),
           ),
-          if (i < orderStages.length - 1) const SizedBox(width: 3),
+          if (i < track.length - 1) const SizedBox(width: 3),
         ],
       ]),
     );
+    final stepText = cancelled || number <= 0 ? s.orderStatus(status) : '${s.orderStatus(status)} · ${s.t('flowStepOf', [number, orderSteps.length])}';
     if (compact) {
       return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
         bar,
         const SizedBox(height: 6),
-        Text(
-          index < 0 ? s.status(status) : s.t('stage${orderStages[index]}'),
-          style: context.tt.labelMedium?.copyWith(color: cancelled ? fg.textMuted : fg.primary, fontWeight: FontWeight.w600),
-        ),
+        Text(stepText, style: context.tt.labelMedium?.copyWith(color: cancelled ? fg.textMuted : fg.primary, fontWeight: FontWeight.w600)),
       ]);
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       bar,
       const SizedBox(height: FgSpace.s4),
       if (cancelled)
-        Text(s.status(status), style: context.tt.titleSmall?.copyWith(color: fg.textMuted))
+        Text(s.orderStatus(status), style: context.tt.titleSmall?.copyWith(color: fg.textMuted))
       else
         FgTimeline(entries: [
-          for (var i = 0; i < orderStages.length; i++)
+          for (var i = 0; i < track.length; i++)
             FgTimelineEntry(
-              title: s.t('stage${orderStages[i]}'),
-              subtitle: i == index ? s.t('next${orderStages[i]}') : null,
-              time: times[orderStages[i]],
-              step: i < index ? FgStep.done : (i == index ? FgStep.current : FgStep.upcoming),
-              tone: FgTone.progress,
+              title: '${track[i].$1.step} · ${s.orderStatus(track[i].$1.status)}',
+              subtitle: [
+                if (track[i].$1.by.isNotEmpty) s.t('flowBy', [track[i].$1.by]),
+                if (i == currentIndex) s.t('next${orderStepSuffix[track[i].$1.status] ?? ''}'),
+              ].join('\n'),
+              time: track[i].$1.at ?? times[track[i].$1.status],
+              step: switch (track[i].$2) {
+                TrackView.done => FgStep.done,
+                TrackView.current || TrackView.alert => FgStep.current,
+                TrackView.upcoming => FgStep.upcoming,
+              },
+              tone: track[i].$2 == TrackView.alert ? FgTone.bad : FgTone.progress,
             ),
         ]),
     ]);

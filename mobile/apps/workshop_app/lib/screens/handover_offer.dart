@@ -2,14 +2,29 @@ import 'package:fg_core/fg_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'gate_screen.dart' show QrScanPage;
 import 'providers.dart';
 
 /// Custody roles a vehicle can be handed to (FGCustodyRole, same list as the Workshop Portal).
 const custodyRoles = ['Customer', 'Gate', 'Reception', 'Workshop', 'Technician', 'Stores', 'Partner', 'QC', 'Cashier', 'Collector'];
 
-/// Offer a handover (POST /workshop/handovers) through the outbox. A late handover back from the workshop is refused by
-/// D365 (422 "delay ...") until it carries a delay reason (reasons LateHandover, or Delay codes LH-*) and a note: the
-/// card then asks for them and sends the offer again.
+/// Prompt 2 (4.8) / 3 (B2): the roles the custody chain allows now for the order, the usual next one, the active staff of
+/// each custody role in the order's workshop and whether the caller may hand over outside the chain (workshop manager).
+/// Null when the API refused (older API): the full role list is offered and D365 still checks the chain.
+final handoverRolesProvider = FutureProvider.autoDispose.family<FgRow?, String>((ref, orderId) async {
+  try {
+    return asRow(await ref.watch(apiProvider).get('/workshop/service-orders/${Uri.encodeComponent(orderId)}/handover-roles'));
+  } on ApiException catch (e) {
+    if (e.isNetwork) rethrow;
+    return null;
+  }
+});
+
+/// Offer a handover (POST /workshop/handovers) through the outbox. Only the roles the custody chain allows are listed,
+/// the usual next one preselected; the receiver is picked from the active staff of that role or read from their badge QR.
+/// The workshop manager may hand over outside the chain with a reason (POST /workshop/handovers/override, written to the
+/// custody history). A late handover back from the workshop is refused by D365 (422 "delay ...") until it carries a
+/// delay reason (reasons LateHandover, or Delay codes LH-*) and a note: the card then asks for them and sends the offer again.
 class OfferHandoverCard extends ConsumerStatefulWidget {
   const OfferHandoverCard({super.key, required this.orderId, required this.order});
   final String orderId;
@@ -20,22 +35,54 @@ class OfferHandoverCard extends ConsumerStatefulWidget {
 }
 
 class _OfferHandoverCardState extends ConsumerState<OfferHandoverCard> {
-  String _toRole = 'Customer';
+  String? _toRole;
   final _toParty = TextEditingController();
   final _toUser = TextEditingController();
   final _odometer = TextEditingController();
   final _fuel = TextEditingController();
   final _keys = TextEditingController(text: '1');
   final _condition = TextEditingController();
+  final _overrideReason = TextEditingController();
+  bool _override = false;
   bool _busy = false;
   bool _open = false;
 
   @override
   void dispose() {
-    for (final c in [_toParty, _toUser, _odometer, _fuel, _keys, _condition]) {
+    for (final c in [_toParty, _toUser, _odometer, _fuel, _keys, _condition, _overrideReason]) {
       c.dispose();
     }
     super.dispose();
+  }
+
+  /// Roles offered now: the chain's allowed roles (all roles while overriding, or when the API sent none).
+  List<String> _roles(FgRow? info) {
+    final allowed = [for (final r in (info?['allowed'] is List ? info!['allowed'] as List : const [])) '$r'];
+    return _override || allowed.isEmpty ? custodyRoles : allowed;
+  }
+
+  /// Active staff of a custody role ({user, name}).
+  List<FgRow> _staff(FgRow? info, String role) {
+    final staff = info?['staff'];
+    return staff is Map ? asRows(staff[role]) : const [];
+  }
+
+  /// Scans a staff badge (or a customer's arrival QR) and fills role, receiver and user from it.
+  Future<void> _scanBadge() async {
+    final s = ref.read(stringsProvider);
+    final code = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => QrScanPage(title: s.t('scanBadge'), hint: s.t('scanBadgeHint'))));
+    if (code == null || !mounted) return;
+    try {
+      final r = asRow(await ref.read(apiProvider).post('/workshop/badges/resolve', body: {'code': code}));
+      setState(() {
+        if (r.s('toRole').isNotEmpty) _toRole = r.s('toRole');
+        _toParty.text = r.s('toParty');
+        _toUser.text = r.s('toUser');
+      });
+      if (mounted) showDone(context, s.t('badgeRead', [r.s('toParty')]));
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
   }
 
   double _num(TextEditingController c) => double.tryParse(c.text.replaceAll(',', '.').trim()) ?? 0;
@@ -56,31 +103,45 @@ class _OfferHandoverCardState extends ConsumerState<OfferHandoverCard> {
     return rows;
   }
 
-  Future<void> _offer({String? delayReason, String? delayNote}) async {
+  Future<void> _offer(String role, {String? delayReason, String? delayNote}) async {
     final s = ref.read(stringsProvider);
     if (_toParty.text.trim().isEmpty) return;
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final r = await ref.read(outboxProvider.notifier).submit('/workshop/handovers', label: '${s.t('offerHandover')} · ${widget.orderId} → ${s.status(_toRole)}', body: {
-        'serviceOrderId': widget.orderId,
-        'toRole': _toRole,
-        'toParty': _toParty.text.trim(),
-        'toUser': _toUser.text.trim(),
-        'location': widget.order.s('Workshop'),
-        'odometer': _num(_odometer),
-        'fuelPercent': _num(_fuel).clamp(0, 100),
-        'condition': _condition.text.trim(),
-        'keys': int.tryParse(_keys.text.trim()) ?? 0,
-        'delayReason': delayReason,
-        'delayNote': delayNote,
-      });
+      final r = _override
+          // prompt 2 (4.8): outside the custody chain, workshop manager only, reason kept in the custody history
+          ? await ref.read(outboxProvider.notifier).submit('/workshop/handovers/override', label: '${s.t('handoverOverride')} · ${widget.orderId} → ${s.status(role)}', body: {
+              'serviceOrderId': widget.orderId,
+              'toRole': role,
+              'toParty': _toParty.text.trim(),
+              'toUser': _toUser.text.trim(),
+              'odometer': _num(_odometer),
+              'fuelPercent': _num(_fuel).clamp(0, 100),
+              'condition': _condition.text.trim(),
+              'keys': int.tryParse(_keys.text.trim()) ?? 0,
+              'reason': _overrideReason.text.trim(),
+            })
+          : await ref.read(outboxProvider.notifier).submit('/workshop/handovers', label: '${s.t('offerHandover')} · ${widget.orderId} → ${s.status(role)}', body: {
+              'serviceOrderId': widget.orderId,
+              'toRole': role,
+              'toParty': _toParty.text.trim(),
+              'toUser': _toUser.text.trim(),
+              'location': widget.order.s('Workshop'),
+              'odometer': _num(_odometer),
+              'fuelPercent': _num(_fuel).clamp(0, 100),
+              'condition': _condition.text.trim(),
+              'keys': int.tryParse(_keys.text.trim()) ?? 0,
+              'delayReason': delayReason,
+              'delayNote': delayNote,
+            });
       FgHaptics.success();
       messenger.showSnackBar(SnackBar(content: Text(r.queued ? s.t('queued') : s.t('handoverOffered'))));
       if (mounted) setState(() => _open = false);
       ref.invalidate(orderProvider(widget.orderId));
+      ref.invalidate(handoverRolesProvider(widget.orderId));
     } on ApiException catch (e) {
-      if (e.status == 422 && e.message.toLowerCase().contains('delay') && delayReason == null && mounted) {
+      if (!_override && e.status == 422 && e.message.toLowerCase().contains('delay') && delayReason == null && mounted) {
         setState(() => _busy = false);
         FgHaptics.warning();
         final reasons = await _delayReasons();
@@ -90,7 +151,7 @@ class _OfferHandoverCardState extends ConsumerState<OfferHandoverCard> {
           isScrollControlled: true,
           builder: (_) => _DelaySheet(reasons: reasons, message: e.message),
         );
-        if (answer != null && mounted) await _offer(delayReason: answer.$1, delayNote: answer.$2);
+        if (answer != null && mounted) await _offer(role, delayReason: answer.$1, delayNote: answer.$2);
         return;
       }
       FgHaptics.warning();
@@ -115,19 +176,57 @@ class _OfferHandoverCardState extends ConsumerState<OfferHandoverCard> {
         onPressed: () => setState(() => _open = true),
       );
     }
+    final rolesInfo = ref.watch(handoverRolesProvider(widget.orderId));
+    final info = rolesInfo.value;
+    final roles = _roles(info);
+    final suggested = info?.s('suggested') ?? '';
+    // the usual next role is preselected (never a fixed default); a role no longer allowed falls back to it
+    final role = _toRole != null && roles.contains(_toRole) ? _toRole! : (roles.contains(suggested) ? suggested : roles.first);
+    final staff = _staff(info, role);
+    final canOverride = info?['canOverride'] == true;
+    final selectedStaff = staff.any((u) => u.s('user') == _toUser.text.trim()) ? _toUser.text.trim() : null;
+    final ready = _toParty.text.trim().isNotEmpty && (!_override || _overrideReason.text.trim().isNotEmpty);
     return SectionCard(
       title: s.t('offerHandover'),
       icon: FgIcons.handover,
       trailing: IconButton(tooltip: s.t('cancel'), icon: const Icon(FgIcons.close), onPressed: () => setState(() => _open = false)),
       children: [
+        if (rolesInfo.isLoading && info == null) const LinearProgressIndicator(),
+        if (info != null && !_override) ...[
+          Text(s.t('handoverChainHint'), style: context.tt.bodySmall),
+          const SizedBox(height: FgSpace.s2),
+        ],
         DropdownButtonFormField<String>(
-          initialValue: _toRole,
+          key: ValueKey('role-$role-${roles.length}-$_override'),
+          initialValue: role,
           isExpanded: true,
           decoration: InputDecoration(labelText: s.t('toRole')),
-          items: [for (final r in custodyRoles) DropdownMenuItem(value: r, child: Text(s.status(r)))],
-          onChanged: (v) => setState(() => _toRole = v ?? 'Customer'),
+          items: [
+            for (final r in roles)
+              DropdownMenuItem(value: r, child: Text(r == suggested ? '${s.status(r)} · ${s.t('toRoleUsual')}' : s.status(r))),
+          ],
+          onChanged: (v) => setState(() {
+            _toRole = v;
+            _toUser.clear();
+            _toParty.clear();
+          }),
         ),
         const SizedBox(height: FgSpace.s3),
+        if (staff.isNotEmpty) ...[
+          DropdownButtonFormField<String>(
+            key: ValueKey('staff-$role-$selectedStaff'),
+            initialValue: selectedStaff,
+            isExpanded: true,
+            decoration: InputDecoration(labelText: s.t('toPartyStaff'), prefixIcon: const Icon(FgIcons.technician, size: 20)),
+            items: [for (final u in staff) DropdownMenuItem(value: u.s('user'), child: Text(u.s('name').isEmpty ? u.s('user') : u.s('name'), overflow: TextOverflow.ellipsis))],
+            onChanged: (v) => setState(() {
+              final u = staff.firstWhere((x) => x.s('user') == v);
+              _toUser.text = u.s('user');
+              _toParty.text = u.s('name').isEmpty ? u.s('user') : u.s('name');
+            }),
+          ),
+          const SizedBox(height: FgSpace.s3),
+        ],
         TextField(
           controller: _toParty,
           onChanged: (_) => setState(() {}),
@@ -135,6 +234,25 @@ class _OfferHandoverCardState extends ConsumerState<OfferHandoverCard> {
         ),
         const SizedBox(height: FgSpace.s3),
         TextField(controller: _toUser, decoration: InputDecoration(labelText: s.t('toUser'))),
+        const SizedBox(height: FgSpace.s2),
+        OutlinedButton.icon(onPressed: _busy ? null : _scanBadge, icon: const Icon(FgIcons.qr, size: 18), label: Text(s.t('scanBadge'))),
+        if (canOverride) ...[
+          const SizedBox(height: FgSpace.s2),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _override,
+            title: Text(s.t('handoverOverride')),
+            subtitle: Text(s.t('handoverOverrideHint'), style: context.tt.bodySmall),
+            onChanged: (v) => setState(() => _override = v),
+          ),
+          if (_override)
+            TextField(
+              controller: _overrideReason,
+              maxLength: 255,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(labelText: s.t('handoverOverrideReason')),
+            ),
+        ],
         const SizedBox(height: FgSpace.s3),
         Row(children: [
           Expanded(child: TextField(controller: _odometer, keyboardType: decimal, style: tabular, decoration: InputDecoration(labelText: s.t('odometer'), suffixText: 'km'))),
@@ -147,7 +265,7 @@ class _OfferHandoverCardState extends ConsumerState<OfferHandoverCard> {
         TextField(controller: _condition, minLines: 2, maxLines: 3, decoration: InputDecoration(labelText: s.t('conditionNotes'), alignLabelWithHint: true)),
         const SizedBox(height: FgSpace.s3),
         FilledButton.icon(
-          onPressed: _busy || _toParty.text.trim().isEmpty ? null : () => _offer(),
+          onPressed: _busy || !ready ? null : () => _offer(role),
           icon: _busy
               ? SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.fg.onAction))
               : const Icon(FgIcons.send, size: 18),

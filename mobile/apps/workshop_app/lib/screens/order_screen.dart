@@ -121,7 +121,7 @@ class OrderScreen extends ConsumerWidget {
                   tab([
                     if (jobs.isEmpty) EmptyState(art: FgArt.empty, title: s.t('noJobsYet')),
                     for (final j in jobs) ...[
-                      JobCard(orderId: orderId, job: j, tech: tech, qc: qc),
+                      JobCard(orderId: orderId, job: j, tech: tech, qc: qc, evidence: asRows(d['evidence'])),
                       const SizedBox(height: FgSpace.s3),
                     ],
                   ]),
@@ -140,7 +140,7 @@ class OrderScreen extends ConsumerWidget {
                       const SizedBox(height: FgSpace.s3),
                     ],
                     for (final h in handovers.where((h) => h.s('Status') == 'Offered')) ...[
-                      _HandoverCard(orderId: orderId, handover: h),
+                      _HandoverCard(orderId: orderId, handover: h, order: o),
                       const SizedBox(height: FgSpace.s3),
                     ],
                     if (handovers.every((h) => h.s('Status') != 'Offered')) ...[
@@ -169,9 +169,9 @@ class OrderScreen extends ConsumerWidget {
                   ]),
                   tab([
                     SectionCard(title: s.t('progress'), icon: FgIcons.timeline, children: [
-                      OrderProgress(status: o.s('Status'), times: {
+                      OrderProgress(status: o.s('Status'), flow: OrderFlow.fromJson(d['flow']), times: {
                         'Arrived': o.d('ArrivedDateTime'),
-                        'Ready': o.d('ReadyDateTime'),
+                        'ReadyForCollection': o.d('ReadyDateTime'),
                         'Released': o.d('ReleasedDateTime'),
                       }),
                     ]),
@@ -316,7 +316,7 @@ class _OrderHeader extends ConsumerWidget {
               ),
             ]),
           ),
-          StatusPill(o.s('Status')),
+          StatusPill.order(o.s('Status')),
         ]),
         if (promise != null) ...[
           const SizedBox(height: FgSpace.s2),
@@ -344,13 +344,18 @@ class _OrderHeader extends ConsumerWidget {
   }
 }
 
-/// One job line with the technician / QC actions; tap opens the full-screen job view with big buttons.
+/// One job line with the technician / QC actions; tap opens the full-screen job view with big buttons. Prompt 2 (4.10):
+/// a job starts only with a Before photo and finishes only with an After photo (D365 parameter, on by default), so the
+/// photo of the job is offered next to Start / Finish; D365's refusal text is shown when it is missing.
 class JobCard extends ConsumerWidget {
-  const JobCard({super.key, required this.orderId, required this.job, required this.tech, required this.qc});
+  const JobCard({super.key, required this.orderId, required this.job, required this.tech, required this.qc, this.evidence = const []});
   final String orderId;
   final FgRow job;
   final bool tech;
   final bool qc;
+
+  /// Evidence of the order (photo counts per job).
+  final List<FgRow> evidence;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -361,19 +366,32 @@ class JobCard extends ConsumerWidget {
     final running = tech && status == 'InProgress';
     final checklist = (tech || qc) && job.s('QCTemplate').isNotEmpty && status != 'QCPassed';
     final qcNow = qc && status == 'Completed';
+    final before = jobPhotoCount(evidence, line, 'Before');
+    final after = jobPhotoCount(evidence, line, 'After');
     return FgListCard(
       leading: IconTile(FgIcons.status(status), tone: toneOf(status)),
       title: job.s('Description').isEmpty ? job.s('JobTypeId') : job.s('Description'),
-      subtitle: '${s.t('line')} $line · ${job.s('JobTypeId')}',
+      subtitle: '${s.t('line')} $line · ${job.s('JobTypeId')} · ${s.t('jobPhotosCount', [before, after])}',
       trailing: StatusPill(status, dense: true),
       onTap: () => context.push('/orders/${Uri.encodeComponent(orderId)}/jobs/${Uri.encodeComponent(line)}'),
       footer: !(canStart || running || checklist || qcNow)
           ? null
           : Wrap(spacing: FgSpace.s2, runSpacing: FgSpace.s2, children: [
-              if (canStart)
+              if (canStart) ...[
+                OutlinedButton.icon(
+                  onPressed: () => takeEvidencePhoto(context, ref, orderId, category: 'Before', jobLine: line),
+                  icon: Icon(before > 0 ? FgIcons.good : FgIcons.camera, size: 18),
+                  label: Text(s.t('beforePhoto')),
+                ),
                 FilledButton.icon(onPressed: () => jobCommand(context, ref, orderId, line, 'start'), icon: const Icon(FgIcons.start, size: 18), label: Text(s.t('start'))),
+              ],
               if (running) ...[
                 OutlinedButton.icon(onPressed: () => jobPause(context, ref, orderId, line), icon: const Icon(FgIcons.pause, size: 18), label: Text(s.t('pause'))),
+                OutlinedButton.icon(
+                  onPressed: () => takeEvidencePhoto(context, ref, orderId, category: 'After', jobLine: line),
+                  icon: Icon(after > 0 ? FgIcons.good : FgIcons.camera, size: 18),
+                  label: Text(s.t('afterPhoto')),
+                ),
                 FilledButton.icon(onPressed: () => jobCommand(context, ref, orderId, line, 'finish'), icon: const Icon(FgIcons.finish, size: 18), label: Text(s.t('finish'))),
               ],
               if (checklist)
@@ -472,11 +490,62 @@ class DamageMap extends ConsumerWidget {
 
 /// Receiver side of a two-party handover: accept with a signature (POST /workshop/handovers/{id}/sign: accepts and
 /// generates the signed condition report / release note; online only), accept without signature through the outbox
-/// (also offline), or reject with a D365 reason code.
+/// (also offline), or reject with a D365 reason code. Prompt 2 (4.9) / 3 (B2): at reception (gate → reception) the
+/// delivering driver signs first (signer role Driver, no acceptance), then the receiving advisor signs and accepts; the
+/// condition report carries both signatures. D365 refuses the acceptance without the driver's signature.
 class _HandoverCard extends ConsumerWidget {
-  const _HandoverCard({required this.orderId, required this.handover});
+  const _HandoverCard({required this.orderId, required this.handover, required this.order});
   final String orderId;
   final FgRow handover;
+  final FgRow order;
+
+  bool get _needsDriver => handover.s('ToRole') == 'Reception' && handover.s('FromRole') == 'Gate' && handover.s('DriverSignatureEvidence').isEmpty;
+
+  /// Signer role of the receiving staff user (fixed list of the API: Advisor, Gate, WorkshopManager).
+  static String _signerRole(PortalUser? user) => (user?.has(['Advisor']) ?? false)
+      ? 'Advisor'
+      : (user?.has(['Gate']) ?? false)
+          ? 'Gate'
+          : 'WorkshopManager';
+
+  /// The delivering driver signs on the phone of the advisor; returns true when the signature was stored.
+  Future<bool> _driverSigns(BuildContext context, WidgetRef ref) async {
+    final s = ref.read(stringsProvider);
+    final api = ref.read(apiProvider);
+    final controller = SignatureController();
+    final signer = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: false,
+      builder: (context) => _SignatureSheet(
+        controller: controller,
+        handover: handover,
+        initialName: order.s('DelivererName'),
+        online: true,
+        title: s.t('driverSignTitle'),
+        hint: s.t('driverSignHint'),
+        requireSignature: true,
+        confirmLabel: s.t('driverSigns'),
+      ),
+    );
+    final png = signer == null ? null : await controller.toPngBytes();
+    controller.dispose();
+    if (signer == null || png == null || !context.mounted) return false;
+    try {
+      await api.post('/workshop/handovers/${Uri.encodeComponent(handover.s('HandoverId'))}/sign', idempotencyKey: const Uuid().v4(), body: {
+        'signaturePng': base64Encode(png),
+        'signerName': signer,
+        'signerRole': 'Driver',
+        'termsVersion': '1',
+        'language': s.lang,
+      });
+      if (context.mounted) showDone(context, s.t('driverSigned'));
+      return true;
+    } catch (e) {
+      if (context.mounted) showError(context, e);
+      return false;
+    }
+  }
 
   Future<bool> _respond(BuildContext context, WidgetRef ref, String response, String reason, {String? signerName}) async {
     final s = ref.read(stringsProvider);
@@ -501,6 +570,14 @@ class _HandoverCard extends ConsumerWidget {
     final container = ProviderScope.containerOf(context, listen: false);
     final api = ref.read(apiProvider);
     final online = ref.read(connectivityProvider).value ?? true;
+    if (_needsDriver) {
+      // the driver's signature needs a live connection (D365 refuses the reception without it)
+      if (!online) {
+        showError(context, s.t('driverSignOnline'));
+        return;
+      }
+      if (!await _driverSigns(context, ref) || !context.mounted) return;
+    }
     final controller = SignatureController();
     final signer = await showModalBottomSheet<String>(
       context: context,
@@ -523,8 +600,8 @@ class _HandoverCard extends ConsumerWidget {
       await api.post('/workshop/handovers/${Uri.encodeComponent(handover.s('HandoverId'))}/sign', idempotencyKey: const Uuid().v4(), body: {
         'signaturePng': base64Encode(png),
         'signerName': signer,
-        'signerRole': handover.s('ToRole'),
-        'termsVersion': '',
+        'signerRole': _signerRole(user),
+        'termsVersion': '1',
         'language': s.lang,
       });
       container.invalidate(orderProvider(orderId));
@@ -570,6 +647,13 @@ class _HandoverCard extends ConsumerWidget {
             const SizedBox(height: FgSpace.s2),
             FgNotice(tone: FgTone.attention, icon: FgIcons.promise, title: s.t('lateHandover'), message: [handover.s('DelayReason'), handover.s('DelayNote')].where((x) => x.isNotEmpty).join(' · ')),
           ],
+          if (_needsDriver) ...[
+            const SizedBox(height: FgSpace.s2),
+            FgNotice(tone: FgTone.info, icon: FgIcons.signature, message: s.t('driverSignFirst')),
+          ] else if (handover.s('ToRole') == 'Reception' && handover.s('DriverSignerName').isNotEmpty) ...[
+            const SizedBox(height: FgSpace.s2),
+            FgNotice(tone: FgTone.good, icon: FgIcons.signature, message: s.t('driverSignedBy', [handover.s('DriverSignerName')])),
+          ],
           const SizedBox(height: FgSpace.s3),
           Row(children: [
             Expanded(
@@ -602,11 +686,28 @@ class _HandoverCard extends ConsumerWidget {
 /// Signature and signer name; pops the signer name (accept) or null (cancel). Without strokes (or offline) the handover
 /// is accepted without a signed document.
 class _SignatureSheet extends ConsumerStatefulWidget {
-  const _SignatureSheet({required this.controller, required this.handover, required this.initialName, required this.online});
+  const _SignatureSheet({
+    required this.controller,
+    required this.handover,
+    required this.initialName,
+    required this.online,
+    this.title,
+    this.hint,
+    this.requireSignature = false,
+    this.confirmLabel,
+  });
   final SignatureController controller;
   final FgRow handover;
   final String initialName;
   final bool online;
+
+  /// Sheet title and hint (default: sign the handover).
+  final String? title;
+  final String? hint;
+
+  /// A drawn signature is mandatory (the delivering driver at reception).
+  final bool requireSignature;
+  final String? confirmLabel;
 
   @override
   ConsumerState<_SignatureSheet> createState() => _SignatureSheetState();
@@ -628,7 +729,7 @@ class _SignatureSheetState extends ConsumerState<_SignatureSheet> {
       child: Padding(
         padding: EdgeInsets.fromLTRB(FgSpace.gutter, FgSpace.s5, FgSpace.gutter, FgSpace.s4 + MediaQuery.viewInsetsOf(context).bottom),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text(s.t('signHandover'), style: context.tt.titleLarge),
+          Text(widget.title ?? s.t('signHandover'), style: context.tt.titleLarge),
           const SizedBox(height: FgSpace.s1),
           Text(
             '${widget.handover.s('HandoverId')} · ${s.status(widget.handover.s('FromRole'))} → ${s.status(widget.handover.s('ToRole'))}',
@@ -647,7 +748,7 @@ class _SignatureSheetState extends ConsumerState<_SignatureSheet> {
           if (!widget.online)
             FgNotice(tone: FgTone.attention, icon: FgIcons.offline, message: s.t('signOffline'))
           else
-            Text(s.t('signatureHint'), style: context.tt.bodySmall),
+            Text(widget.hint ?? s.t('signatureHint'), style: context.tt.bodySmall),
           const SizedBox(height: FgSpace.s3),
           Row(children: [
             Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context), child: Text(s.t('cancel')))),
@@ -656,14 +757,14 @@ class _SignatureSheetState extends ConsumerState<_SignatureSheet> {
               child: ListenableBuilder(
                 listenable: widget.controller,
                 builder: (context, _) => FilledButton.icon(
-                  onPressed: _name.text.trim().isEmpty
+                  onPressed: _name.text.trim().isEmpty || (widget.requireSignature && widget.controller.isEmpty)
                       ? null
                       : () {
                           FgHaptics.success();
                           Navigator.pop(context, _name.text.trim());
                         },
                   icon: const Icon(FgIcons.check, size: 18),
-                  label: Text(s.t(widget.controller.isEmpty || !widget.online ? 'acceptUnsigned' : 'acceptAndSign')),
+                  label: Text(widget.confirmLabel ?? s.t(widget.controller.isEmpty || !widget.online ? 'acceptUnsigned' : 'acceptAndSign')),
                 ),
               ),
             ),

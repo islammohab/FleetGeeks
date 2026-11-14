@@ -46,7 +46,25 @@ try {
                     }
                 }
             }
-            Set-Content $manifest $xml -Encoding utf8
+            # UTF-8 without BOM (Windows PowerShell 5's -Encoding utf8 writes a BOM)
+            [IO.File]::WriteAllText((Resolve-Path $manifest), $xml, (New-Object Text.UTF8Encoding $false))
+            # flutter_appauth needs the redirect scheme placeholder, otherwise the manifest merge fails
+            $gradle = (Resolve-Path 'android/app/build.gradle.kts').Path
+            $g = [IO.File]::ReadAllText($gradle)
+            if ($g -notmatch 'appAuthRedirectScheme') {
+                $scheme = if ($app.Name -eq 'customer_app') { 'com.fleetgeeks.customer' } else { 'com.fleetgeeks.workshop' }
+                $g = [regex]::Replace($g, '(minSdk = flutter\.minSdkVersion)', "`$1`n        manifestPlaceholders[`"appAuthRedirectScheme`"] = `"$scheme`"", 1)
+                [IO.File]::WriteAllText($gradle, $g, (New-Object Text.UTF8Encoding $false))
+            }
+            # flutter_appauth compiles against an old SDK while its AndroidX dependencies need compileSdk >= 34:
+            # raise every Android library plugin to compileSdk 36 (before evaluationDependsOn in the root build file)
+            $rootGradle = (Resolve-Path 'android/build.gradle.kts').Path
+            $r = [IO.File]::ReadAllText($rootGradle)
+            if ($r -notmatch 'LibraryExtension') {
+                $raise = "subprojects {`n    afterEvaluate {`n        extensions.findByType(com.android.build.api.dsl.LibraryExtension::class.java)?.let { lib ->`n            if ((lib.compileSdk ?: 0) < 36) {`n                lib.compileSdk = 36`n            }`n        }`n    }`n}`n"
+                $r = [regex]::Replace($r, '(subprojects \{\r?\n\s*project\.evaluationDependsOn)', "$raise`$1", 1)
+                [IO.File]::WriteAllText($rootGradle, $r, (New-Object Text.UTF8Encoding $false))
+            }
             if ($Brand) {
                 dart run flutter_launcher_icons
                 dart run flutter_native_splash:create

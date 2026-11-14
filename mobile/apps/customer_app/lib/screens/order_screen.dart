@@ -14,6 +14,18 @@ final estimateProvider = FutureProvider.autoDispose.family<FgRow, String>(
   (ref, id) async => asRow(await ref.watch(apiProvider).get('/estimates/${Uri.encodeComponent(id)}')),
 );
 
+/// Prompt 2 (1.1) / 3 (B2): billing of the order read from D365 (profile, release rule, sales orders, posted invoices and
+/// whether payments are taken in the portal). Null when the user may not see finance or D365 refused: then no payment and
+/// no invoice section is shown (payments in the portal are off by default).
+final orderBillingProvider = FutureProvider.autoDispose.family<FgRow?, String>((ref, id) async {
+  try {
+    return asRow(await ref.watch(apiProvider).get('/service-orders/${Uri.encodeComponent(id)}/billing'));
+  } on ApiException catch (e) {
+    if (e.isNetwork) rethrow;
+    return null;
+  }
+});
+
 /// Photos of a service order (evidence rows that are images), newest first.
 List<FgPhoto> orderPhotos(List<FgRow> evidence, Strings s) => [
       for (final e in evidence.where(isImageEvidence))
@@ -38,6 +50,7 @@ class OrderScreen extends ConsumerWidget {
     ref.invalidate(orderProgressProvider(orderId));
     ref.invalidate(orderChecklistsProvider(orderId));
     ref.invalidate(orderDocumentsProvider(orderId));
+    ref.invalidate(orderBillingProvider(orderId));
     ref.invalidate(unreadMessagesProvider);
   }
 
@@ -79,8 +92,15 @@ class OrderScreen extends ConsumerWidget {
             };
             final promises = asRows(d['promiseHistory']);
             final promise = o.d('CurrentPromise');
+            final flow = OrderFlow.fromJson(d['flow']);
+            final billing = ref.watch(orderBillingProvider(orderId)).value;
             final deposit = o.n('DepositRequired') - o.n('DepositPaid');
-            final canPay = deposit > 0 || const {'ReadyForCollection', 'Released', 'Closed'}.contains(status);
+            // prompt 2 (1.1): no payment screen unless "Payments in the portal" = Yes (D365 parameter, default No)
+            final portalPayments = billing?['portalPayments'] == true;
+            final canPay = portalPayments && (deposit > 0 || const {'WorkAccepted', 'ReadyForCollection', 'Released', 'Closed'}.contains(status));
+            // prompt 2 (4.4): the customer accepts the work at step 12 (quality check passed, vehicle back at reception)
+            final canAccept = approver && (flow != null ? flow.can('accept') : status == 'ReadyForHandback');
+            final invoices = asRows(billing?['documents']).where((x) => x.s('invoiceId').isNotEmpty).toList();
             return ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(FgSpace.gutter, FgSpace.s2, FgSpace.gutter, FgSpace.s6),
@@ -98,7 +118,7 @@ class OrderScreen extends ConsumerWidget {
                             Text(s.status(o.s('ServiceType')), style: context.tt.bodySmall),
                           ]),
                         ),
-                        StatusPill(status),
+                        StatusPill.order(status),
                       ]),
                       if (promise != null && isOrderOpen(status)) ...[
                         const SizedBox(height: FgSpace.s3),
@@ -124,6 +144,10 @@ class OrderScreen extends ConsumerWidget {
                   const SizedBox(height: FgSpace.s3),
                   _EstimateCard(orderId: orderId, estimate: e, canDecide: approver),
                 ],
+                if (canAccept) ...[
+                  const SizedBox(height: FgSpace.s3),
+                  _AcceptWorkCard(orderId: orderId, onDone: () => _refreshAll(ref)),
+                ],
                 if (canPay) ...[
                   const SizedBox(height: FgSpace.s3),
                   _PaymentCard(orderId: orderId, order: o),
@@ -133,13 +157,17 @@ class OrderScreen extends ConsumerWidget {
                   title: s.t('progress'),
                   icon: FgIcons.timeline,
                   children: [
-                    OrderProgress(status: status, times: {
+                    OrderProgress(status: status, flow: flow, times: {
                       'Arrived': o.d('ArrivedDateTime'),
-                      'Ready': o.d('ReadyDateTime'),
+                      'ReadyForCollection': o.d('ReadyDateTime'),
                       'Released': o.d('ReleasedDateTime'),
                     }),
                   ],
                 ),
+                if (invoices.isNotEmpty) ...[
+                  const SizedBox(height: FgSpace.s3),
+                  _InvoicesCard(orderId: orderId, invoices: invoices),
+                ],
                 const SizedBox(height: FgSpace.s3),
                 SectionCard(title: s.t('jobs'), icon: FgIcons.tasks, children: [JobProgressList(orderId: orderId)]),
                 const SizedBox(height: FgSpace.s3),
@@ -209,6 +237,94 @@ class _Documents extends ConsumerWidget {
       AsyncError(:final error) => ErrorState(error: error, compact: true, onRetry: () => ref.invalidate(orderDocumentsProvider(orderId))),
       _ => const Shimmer(child: Column(children: [SkeletonBox(), SizedBox(height: 8), SkeletonBox(width: 180)])),
     };
+  }
+}
+
+/// Prompt 2 (4.4) / 3 (B1): the customer accepts the completed work (step 12 → 13, Work accepted). Live call only; a step
+/// that is not reached yet is refused by D365 with the step-order message.
+class _AcceptWorkCard extends ConsumerStatefulWidget {
+  const _AcceptWorkCard({required this.orderId, required this.onDone});
+  final String orderId;
+  final VoidCallback onDone;
+
+  @override
+  ConsumerState<_AcceptWorkCard> createState() => _AcceptWorkCardState();
+}
+
+class _AcceptWorkCardState extends ConsumerState<_AcceptWorkCard> {
+  bool _busy = false;
+
+  Future<void> _accept() async {
+    final s = ref.read(stringsProvider);
+    setState(() => _busy = true);
+    try {
+      await ref.read(apiProvider).post('/service-orders/${Uri.encodeComponent(widget.orderId)}/accept', idempotencyKey: const Uuid().v4());
+      if (mounted) showDone(context, s.t('workAccepted'));
+      widget.onDone();
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
+    return SectionCard(
+      title: s.t('acceptWork'),
+      icon: FgIcons.approve,
+      children: [
+        Text(s.t('acceptWorkHint'), style: context.tt.bodySmall),
+        const SizedBox(height: FgSpace.s3),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+          onPressed: _busy ? null : _accept,
+          icon: _busy ? SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.fg.onAction)) : const Icon(FgIcons.check, size: 18),
+          label: Text(s.t('acceptWork')),
+        ),
+      ],
+    );
+  }
+}
+
+/// Prompt 2 (1.1) / 3 (B2): the posted D365 invoices of the order (read only) with the standard invoice PDF. Payment is
+/// made at the branch unless payments in the portal are switched on.
+class _InvoicesCard extends ConsumerWidget {
+  const _InvoicesCard({required this.orderId, required this.invoices});
+  final String orderId;
+  final List<FgRow> invoices;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(stringsProvider);
+    final open = invoices.any((i) => i.n('balance') > 0.01);
+    return SectionCard(
+      title: s.t('invoices'),
+      icon: FgIcons.document,
+      trailing: CountPill(invoices.length),
+      children: [
+        for (final i in invoices)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const IconTile(FgIcons.document, size: 40),
+            title: Text(i.s('invoiceId')),
+            subtitle: Text(
+              [
+                fmtDate(i.d('invoiceDate'), s.lang, time: false),
+                fmtMoney(i.n('invoiceAmount'), i.s('currency')),
+                '${s.t('invoiceBalance')}: ${fmtMoney(i.n('balance'), i.s('currency'))}',
+              ].join(' · '),
+            ),
+            trailing: const Icon(FgIcons.download, size: 20),
+            onTap: () => openPdf(context, ref, '/service-orders/${Uri.encodeComponent(orderId)}/invoices/${Uri.encodeComponent(i.s('invoiceId'))}.pdf', '${i.s('invoiceId')}.pdf'),
+          ),
+        if (open) ...[
+          const SizedBox(height: FgSpace.s2),
+          FgNotice(tone: FgTone.info, message: s.t('payAtBranch')),
+        ],
+      ],
+    );
   }
 }
 

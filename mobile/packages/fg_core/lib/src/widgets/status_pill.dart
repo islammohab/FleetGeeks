@@ -9,19 +9,27 @@ import '../theme.dart';
 /// Status of any Fleet Geeks record: icon + colour from one mapping ([toneOf], [FgIcons.status]) and the
 /// translated label. Colour is never the only signal (icon and text carry it too).
 class StatusPill extends ConsumerWidget {
-  const StatusPill(this.symbol, {super.key, this.label, this.dense = false});
+  const StatusPill(this.symbol, {super.key, this.label, this.dense = false}) : order = false;
+
+  /// Status of a service order: the label of the 16-step model (same as the portals and D365).
+  const StatusPill.order(this.symbol, {super.key, this.dense = false})
+      : label = null,
+        order = true;
   final String symbol;
 
   /// Overrides the translated status label.
   final String? label;
   final bool dense;
 
+  /// [symbol] is a service order status (16-step model labels).
+  final bool order;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (symbol.isEmpty) return const SizedBox.shrink();
     final s = ref.watch(stringsProvider);
     final c = context.fg.tone(toneOf(symbol));
-    final text = label ?? s.status(symbol);
+    final text = label ?? (order ? s.orderStatus(symbol) : s.status(symbol));
     return Semantics(
       label: '${s.t('status')}: $text',
       excludeSemantics: true,

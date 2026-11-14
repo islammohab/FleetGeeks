@@ -18,6 +18,9 @@ class ApiException implements Exception {
 
   bool get isConflict => status == 409;
 
+  /// Prompt 2 (4.4): D365 refused the action because an earlier step of the order is missing (HTTP 409, code StepOrder).
+  bool get isStepOrder => status == 409 && code == 'StepOrder';
+
   bool get isNetwork => status == 0 || status == 502 || status == 503 || status == 504;
 
   /// Fleet Geeks / D365 refused the command: retrying the same command will not help.
@@ -126,21 +129,23 @@ class ApiClient {
   }
 
   /// Multipart upload (evidence photos and documents).
-  Future<dynamic> upload(String path, {required String filePath, required String contentType, required Map<String, String> fields}) async {
+  Future<dynamic> upload(String path, {required String filePath, required String contentType, required Map<String, String> fields, String? idempotencyKey}) async {
     final parts = contentType.split('/');
-    return _multipart(path, await http.MultipartFile.fromPath('file', filePath, contentType: MediaType(parts.first, parts.last)), fields);
+    return _multipart(path, await http.MultipartFile.fromPath('file', filePath, contentType: MediaType(parts.first, parts.last)), fields, idempotencyKey: idempotencyKey);
   }
 
-  /// Multipart upload of bytes held in memory (for example a signature drawn on the screen).
-  Future<dynamic> uploadBytes(String path, {required List<int> bytes, required String fileName, required String contentType, required Map<String, String> fields}) {
+  /// Multipart upload of bytes held in memory: a signature drawn on the screen, or (D-110) a queued photo decrypted for
+  /// its replay with its Idempotency-Key.
+  Future<dynamic> uploadBytes(String path, {required List<int> bytes, required String fileName, required String contentType, required Map<String, String> fields, String? idempotencyKey}) async {
     final parts = contentType.split('/');
-    return _multipart(path, http.MultipartFile.fromBytes('file', bytes, filename: fileName, contentType: MediaType(parts.first, parts.last)), fields);
+    return _multipart(path, http.MultipartFile.fromBytes('file', bytes, filename: fileName, contentType: MediaType(parts.first, parts.last)), fields, idempotencyKey: idempotencyKey);
   }
 
-  Future<dynamic> _multipart(String path, http.MultipartFile file, Map<String, String> fields) async {
+  Future<dynamic> _multipart(String path, http.MultipartFile file, Map<String, String> fields, {String? idempotencyKey}) async {
     final request = http.MultipartRequest('POST', uri(path));
     final token = await tokenProvider();
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
+    if (idempotencyKey != null) request.headers['Idempotency-Key'] = idempotencyKey;
     request.fields.addAll(fields);
     request.files.add(file);
     final http.Response response;

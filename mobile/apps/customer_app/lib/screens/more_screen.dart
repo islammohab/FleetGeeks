@@ -12,7 +12,7 @@ class MoreScreen extends ConsumerWidget {
     final s = ref.watch(stringsProvider);
     final user = ref.watch(authProvider).value;
     final outbox = ref.watch(outboxProvider).value ?? const <OutboxItem>[];
-    final failed = outbox.where((i) => i.failed).length;
+    final failed = outbox.where((i) => i.needsReview).length;
     return Scaffold(
       appBar: AppBar(title: Text(s.t('more'))),
       body: ListView(padding: const EdgeInsets.fromLTRB(FgSpace.gutter, FgSpace.s2, FgSpace.gutter, FgSpace.s6), children: [
@@ -49,6 +49,7 @@ class MoreScreen extends ConsumerWidget {
             FgMenuTile(icon: FgIcons.compliance, title: s.t('compliance'), subtitle: s.t('complianceMenu'), onTap: () => context.push('/compliance')),
             FgMenuTile(icon: FgIcons.fuel, title: s.t('usage'), subtitle: s.t('usageMenu'), onTap: () => context.push('/usage')),
             FgMenuTile(icon: FgIcons.pool, title: s.t('pool'), subtitle: s.t('poolMenu'), onTap: () => context.push('/pool')),
+            FgMenuTile(icon: FgIcons.notifications, title: s.t('notifications'), onTap: () => context.push('/notifications')),
             FgMenuTile(icon: FgIcons.fault, title: s.t('reportFault'), tone: FgTone.attention, onTap: () => context.push('/fault')),
           ]),
         ),
@@ -71,7 +72,7 @@ class MoreScreen extends ConsumerWidget {
                 ref.read(localeProvider.notifier).toggle();
               },
             ),
-            FgMenuTile(icon: FgIcons.signOut, title: s.t('signOut'), destructive: true, onTap: () => ref.read(authProvider.notifier).signOut()),
+            FgMenuTile(icon: FgIcons.signOut, title: s.t('signOut'), destructive: true, onTap: () => signOutChecked(context, ref)),
           ]),
         ),
         const SizedBox(height: FgSpace.s6),
