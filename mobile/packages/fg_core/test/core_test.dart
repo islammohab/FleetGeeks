@@ -92,7 +92,7 @@ void main() {
     expect(en16.orderStatus('ReadyForCollection'), 'Billing cleared');
     expect(ar16.orderStatus('ReadyForCollection'), 'تمت التسوية المالية');
     expect(ar16.orderStatus('Booked'), 'مؤكد');
-    expect(en16.orderStatus('SomethingElse'), 'Something Else');
+    expect(en16.orderStatus('SomethingElse'), 'Something else');
   });
 
   test('the track comes from the D365 flow; side steps only when reached', () {
