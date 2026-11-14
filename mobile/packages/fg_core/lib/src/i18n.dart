@@ -47,7 +47,7 @@ const Map<String, String> en = {
   'serverChecking': 'Checking the connection...',
   'serverConnected': 'Connected to Fleet Geeks - company {0}',
   'serverEmpty': 'Enter the address.',
-  'serverUnreachable': 'No answer from this address. Check the address, that the phone is on the same Wi-Fi as the PC and that Fleet Geeks was started with START-NETWORK.cmd (firewall: ALLOW-NETWORK.cmd).',
+  'serverUnreachable': 'No answer from this address. Put the phone on the same Wi-Fi as the PC, then start Fleet Geeks on the PC with START-NETWORK.cmd.',
   'serverNotFleetGeeks': 'This address answers, but no Fleet Geeks API or portal was found there.',
   'language': 'العربية',
   'retry': 'Try again',
@@ -79,9 +79,9 @@ const Map<String, String> en = {
   'date': 'Date',
   'serviceType': 'Service type',
   'findSlots': 'Find free times',
-  'noSlots': 'No free times on this day.',
+  'noSlots': 'No free times on this day. Try another day.',
   'confirmBooking': 'Confirm booking',
-  'heldUntil': 'Held until {0}',
+  'heldUntil': 'Time held until {0}. Confirm to keep it.',
   'bookingConfirmed': 'Booking confirmed',
   'arrivalQr': 'Show this QR code at the workshop gate. It works once, for this visit.',
   'reportFault': 'Report a fault',
@@ -89,7 +89,7 @@ const Map<String, String> en = {
   'symptom': 'Symptom',
   'breakdown': 'The vehicle cannot be driven',
   'warningLights': 'Warning lights are on',
-  'faultReported': 'Fault reported: {0}',
+  'faultReported': 'Fault reported. Reference {0}.',
   'orders': 'Service orders',
   'order': 'Service order',
   'promise': 'Promised ready',
@@ -106,8 +106,8 @@ const Map<String, String> en = {
   'scanRelease': 'Scan release code',
   'driverName': 'Driver name',
   'admit': 'Admit vehicle',
-  'admitted': 'Admitted: {0}',
-  'alreadyAdmitted': 'Already admitted: {0} ({1})',
+  'admitted': 'Vehicle admitted. Service order {0}.',
+  'alreadyAdmitted': 'Already admitted. Service order {0} is {1}.',
   'collector': 'Collected by',
   'collectorDriverId': 'Collector driver ID (release)',
   'collectorId4': 'Last 4 characters of the collector ID',
@@ -141,7 +141,7 @@ const Map<String, String> en = {
   'awaitingParts': 'Awaiting parts',
   'qualityCheck': 'Quality check',
   'rework': 'Rework',
-  'readyForCollection': 'Ready for collection',
+  'readyForCollection': 'Billing cleared',
   'atRiskPromises': 'Promises at risk',
   'releaseBlockers': 'Release blocked',
   'pendingHandovers': 'Pending handovers',
@@ -171,7 +171,7 @@ const Map<String, String> en = {
   'location': 'Location',
   'failReason': 'Failure reason',
   'damageMap': 'Damage map',
-  'damageMapHint': 'Tap the area (seen from above, front at the top; left and right are the vehicle’s own sides).',
+  'damageMapHint': 'Tap the area of the vehicle (seen from above, front at the top; left and right are the vehicle’s own sides).',
   'damageType': 'Damage',
   'severity': 'Severity',
   'addDamage': 'Record damage',
@@ -185,7 +185,7 @@ const Map<String, String> en = {
   'from': 'From',
   'to': 'To',
   'driver': 'Driver',
-  'mobility': 'Pickups and deliveries',
+  'mobility': 'Pickup, delivery and replacement vehicle',
   'assignedTo': 'Driver / provider',
   'onTheWay': 'On the way',
   'complete': 'Complete',
@@ -277,7 +277,7 @@ const Map<String, String> en = {
   'noJobsYet': 'No work lines yet',
   'photos': 'Photos',
   'activity': 'Activity',
-  'promiseHistory': 'Promise history',
+  'promiseHistory': 'Promise changes',
   'estimateWaiting': 'Waiting for your decision',
   'estimateWaitingOther': 'Waiting for an approver of your company',
   'tax': 'Tax',
@@ -308,7 +308,7 @@ const Map<String, String> en = {
   'allItemsOk': 'All {0} items OK',
   'issuesFound': '{0} item(s) not OK – the workshop is told',
   'issuesUnsafe': '{0} item(s) not OK, including a safety item – do not drive',
-  'safetyCritical': 'Safety-critical item',
+  'safetyCritical': 'Safety-critical',
   'inspectionMenu': 'Pre-trip checklist, works offline',
   'complianceMenu': 'Registrations, insurance, licences',
   'usageMenu': 'Fuel receipts and incidents',
@@ -416,14 +416,14 @@ const Map<String, String> en = {
   'noMobilityHint': 'New tasks appear here when they are assigned.',
   'eta': 'Expected at',
   'inspectionTab': 'Inspection',
-  'evidence': 'Evidence',
+  'evidence': 'Photos and documents',
   'timeline': 'Timeline',
   'handoverHistory': 'Handover history',
   'continueHealthCheck': 'Continue health check',
   'photoCaption': 'Reception, before / after, damage, QC',
   'noPhotos': 'No photos yet',
   'documents': 'Documents',
-  'custody': 'Custody',
+  'custody': 'With',
   'front': 'Front',
   'signatureNotUploaded': 'The handover is recorded, but the signature could not be uploaded',
   'signHandover': 'Sign to accept the handover',
@@ -440,7 +440,7 @@ const Map<String, String> en = {
   'proposalAccepted': 'New time accepted. The booking is confirmed.',
   'proposalDeclined': 'Proposal declined.',
   'bookingRequest': 'Booking request',
-  'jobType': 'Job type',
+  'jobType': 'Job',
   'bookingWaiting': 'Waiting for the workshop',
   'bookingWaitingText': 'The workshop checks the request and confirms it, or proposes another time. You get a message; the arrival QR appears here once it is confirmed.',
   'bookingDeclined': 'Declined by the workshop',
@@ -525,12 +525,12 @@ const Map<String, String> en = {
   'verifyManuallyHint': 'Check the plate or the VIN on the vehicle, or record why you accept it.',
   'override': 'Override',
   'plateOnVehicle': 'Plate on the vehicle',
-  'overrideReason': 'Override reason',
-  'verifyNow': 'Verify',
-  'offerHandover': 'Offer handover',
+  'overrideReason': 'Manual override reason',
+  'verifyNow': 'Check identity',
+  'offerHandover': 'Hand over',
   'handoverOffered': 'Handover offered.',
   'offerHandoverCaption': 'Hand the vehicle to the next party',
-  'toRole': 'To',
+  'toRole': 'To role',
   'toParty': 'Name of the receiver',
   'toUser': 'Receiver user (optional)',
   'fuelLevel': 'Fuel',
@@ -543,7 +543,7 @@ const Map<String, String> en = {
   'deliveryChecklistCaption': 'Before the vehicle goes back to the customer',
   'handoverSigned': 'Handover accepted and signed. The signed document is ready.',
   'signatureNotSaved': 'Handover accepted, but the signature was not saved (no connection or no signing role).',
-  'signerName': 'Signer name',
+  'signerName': 'Signed by',
   'signOffline': 'No connection: the handover is accepted now, without the signed document.',
   'acceptUnsigned': 'Accept without signature',
   'acceptAndSign': 'Accept and sign',
@@ -556,7 +556,7 @@ const Map<String, String> en = {
   'deliveryDoneAt': 'Delivery checklist done {0}',
   'message': 'Message',
   'messageSent': 'Message sent.',
-  'noMessages': 'No messages yet',
+  'noMessages': 'No messages yet.',
   'noMessagesHint': 'Questions about the work? Write to the workshop here.',
   'waitingToSend': 'Waiting to send',
   'writeMessage': 'Write a message',
@@ -640,9 +640,9 @@ const Map<String, String> ar = {
   'date': 'التاريخ',
   'serviceType': 'نوع الخدمة',
   'findSlots': 'البحث عن أوقات متاحة',
-  'noSlots': 'لا توجد أوقات متاحة في هذا اليوم.',
+  'noSlots': 'لا توجد أوقات متاحة في هذا اليوم. جرّب يومًا آخر.',
   'confirmBooking': 'تأكيد الحجز',
-  'heldUntil': 'محجوز مؤقتًا حتى {0}',
+  'heldUntil': 'الوقت محجوز مؤقتًا حتى {0}. أكّد للاحتفاظ به.',
   'bookingConfirmed': 'تم تأكيد الحجز',
   'arrivalQr': 'اعرض رمز QR عند بوابة الورشة. يعمل مرة واحدة لهذه الزيارة.',
   'reportFault': 'الإبلاغ عن عطل',
@@ -650,7 +650,7 @@ const Map<String, String> ar = {
   'symptom': 'العَرَض',
   'breakdown': 'لا يمكن قيادة المركبة',
   'warningLights': 'أضواء التحذير مضاءة',
-  'faultReported': 'تم الإبلاغ عن العطل: {0}',
+  'faultReported': 'تم الإبلاغ عن العطل. المرجع {0}.',
   'orders': 'أوامر الخدمة',
   'order': 'أمر الخدمة',
   'promise': 'موعد الجاهزية',
@@ -667,8 +667,8 @@ const Map<String, String> ar = {
   'scanRelease': 'مسح رمز الخروج',
   'driverName': 'اسم السائق',
   'admit': 'إدخال المركبة',
-  'admitted': 'تم الإدخال: {0}',
-  'alreadyAdmitted': 'تم الإدخال مسبقًا: {0} ({1})',
+  'admitted': 'تم إدخال المركبة. أمر الخدمة {0}.',
+  'alreadyAdmitted': 'تم الإدخال مسبقًا. أمر الخدمة {0} حالته {1}.',
   'collector': 'المستلم',
   'collectorDriverId': 'رقم سائق المستلم (التسليم)',
   'collectorId4': 'آخر 4 خانات من هوية المستلم',
@@ -702,7 +702,7 @@ const Map<String, String> ar = {
   'awaitingParts': 'بانتظار القطع',
   'qualityCheck': 'فحص الجودة',
   'rework': 'إعادة العمل',
-  'readyForCollection': 'جاهزة للاستلام',
+  'readyForCollection': 'تمت التسوية المالية',
   'atRiskPromises': 'مواعيد معرّضة للتأخير',
   'releaseBlockers': 'خروج موقوف',
   'pendingHandovers': 'تسليمات معلّقة',
@@ -732,7 +732,7 @@ const Map<String, String> ar = {
   'location': 'الموقع',
   'failReason': 'سبب الفشل',
   'damageMap': 'خريطة الأضرار',
-  'damageMapHint': 'اضغط على المنطقة (منظر علوي، الأمام في الأعلى؛ اليمين واليسار هما جانبا المركبة نفسها).',
+  'damageMapHint': 'اضغط على منطقة المركبة (منظر علوي، الأمام في الأعلى؛ اليمين واليسار هما جانبا المركبة نفسها).',
   'damageType': 'الضرر',
   'severity': 'الخطورة',
   'addDamage': 'تسجيل ضرر',
@@ -746,7 +746,7 @@ const Map<String, String> ar = {
   'from': 'من',
   'to': 'إلى',
   'driver': 'السائق',
-  'mobility': 'الاستلام والتوصيل',
+  'mobility': 'الاستلام والتوصيل والمركبة البديلة',
   'assignedTo': 'السائق / المزود',
   'onTheWay': 'في الطريق',
   'complete': 'إنجاز',
@@ -838,7 +838,7 @@ const Map<String, String> ar = {
   'noJobsYet': 'لا توجد أعمال بعد',
   'photos': 'الصور',
   'activity': 'النشاط',
-  'promiseHistory': 'سجل مواعيد الجاهزية',
+  'promiseHistory': 'تغييرات الموعد',
   'estimateWaiting': 'بانتظار قرارك',
   'estimateWaitingOther': 'بانتظار معتمِد من شركتك',
   'tax': 'الضريبة',
@@ -869,7 +869,7 @@ const Map<String, String> ar = {
   'allItemsOk': 'جميع البنود ({0}) سليمة',
   'issuesFound': '{0} بند غير سليم – سيتم إبلاغ الورشة',
   'issuesUnsafe': '{0} بند غير سليم من بينها بند سلامة – لا تقد المركبة',
-  'safetyCritical': 'بند سلامة حرج',
+  'safetyCritical': 'حرج للسلامة',
   'inspectionMenu': 'قائمة ما قبل الرحلة، تعمل دون اتصال',
   'complianceMenu': 'الاستمارات والتأمين والرخص',
   'usageMenu': 'إيصالات الوقود والحوادث',
@@ -977,14 +977,14 @@ const Map<String, String> ar = {
   'noMobilityHint': 'تظهر المهام الجديدة هنا عند إسنادها.',
   'eta': 'الوقت المتوقع',
   'inspectionTab': 'الفحص',
-  'evidence': 'الأدلة',
+  'evidence': 'الصور والمستندات',
   'timeline': 'الخط الزمني',
   'handoverHistory': 'سجل التسليم',
   'continueHealthCheck': 'متابعة فحص الحالة',
   'photoCaption': 'الاستلام، قبل / بعد، الأضرار، الجودة',
   'noPhotos': 'لا توجد صور بعد',
   'documents': 'المستندات',
-  'custody': 'العهدة',
+  'custody': 'العهدة لدى',
   'front': 'الأمام',
   'signatureNotUploaded': 'تم تسجيل التسليم لكن تعذّر رفع التوقيع',
   'signHandover': 'وقّع لقبول التسليم',
@@ -1001,7 +1001,7 @@ const Map<String, String> ar = {
   'proposalAccepted': 'تم قبول الموعد الجديد وتأكيد الحجز.',
   'proposalDeclined': 'تم رفض الاقتراح.',
   'bookingRequest': 'طلب الحجز',
-  'jobType': 'نوع المهمة',
+  'jobType': 'العمل',
   'bookingWaiting': 'بانتظار الورشة',
   'bookingWaitingText': 'تراجع الورشة الطلب وتؤكده أو تقترح موعدًا آخر. ستصلك رسالة، ويظهر رمز الوصول هنا بعد التأكيد.',
   'bookingDeclined': 'رفضته الورشة',
@@ -1086,12 +1086,12 @@ const Map<String, String> ar = {
   'verifyManuallyHint': 'تحقق من اللوحة أو رقم الهيكل على المركبة، أو سجّل سبب القبول.',
   'override': 'تجاوز',
   'plateOnVehicle': 'اللوحة على المركبة',
-  'overrideReason': 'سبب التجاوز',
+  'overrideReason': 'سبب التجاوز اليدوي',
   'verifyNow': 'تحقق',
-  'offerHandover': 'عرض التسليم',
+  'offerHandover': 'تسليم',
   'handoverOffered': 'تم عرض التسليم.',
   'offerHandoverCaption': 'تسليم المركبة للطرف التالي',
-  'toRole': 'إلى',
+  'toRole': 'إلى الدور',
   'toParty': 'اسم المستلم',
   'toUser': 'مستخدم المستلم (اختياري)',
   'fuelLevel': 'الوقود',
@@ -1104,7 +1104,7 @@ const Map<String, String> ar = {
   'deliveryChecklistCaption': 'قبل إعادة المركبة إلى العميل',
   'handoverSigned': 'تم قبول التسليم وتوقيعه. المستند الموقّع جاهز.',
   'signatureNotSaved': 'تم قبول التسليم لكن لم يُحفظ التوقيع (لا يوجد اتصال أو لا توجد صلاحية توقيع).',
-  'signerName': 'اسم الموقّع',
+  'signerName': 'وقّع بواسطة',
   'signOffline': 'لا يوجد اتصال: يُقبل التسليم الآن دون المستند الموقّع.',
   'acceptUnsigned': 'قبول دون توقيع',
   'acceptAndSign': 'قبول وتوقيع',
@@ -1117,7 +1117,7 @@ const Map<String, String> ar = {
   'deliveryDoneAt': 'تم فحص التسليم {0}',
   'message': 'رسالة',
   'messageSent': 'تم إرسال الرسالة.',
-  'noMessages': 'لا توجد رسائل بعد',
+  'noMessages': 'لا توجد رسائل بعد.',
   'noMessagesHint': 'لديك سؤال عن العمل؟ اكتب للورشة هنا.',
   'waitingToSend': 'بانتظار الإرسال',
   'writeMessage': 'اكتب رسالة',
@@ -1161,6 +1161,42 @@ const Map<String, String> statusAr = {
 String splitWords(String symbol) =>
     symbol.replaceAllMapped(RegExp('([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}').replaceAllMapped(RegExp('([A-Z]+)([A-Z][a-z])'), (m) => '${m[1]} ${m[2]}');
 
+/// English labels for D365 status symbols that do not read well when only split into words.
+const statusEn = <String, String>{
+  'Preventive': 'Preventive maintenance',
+  'Corrective': 'Repair',
+  'QCPassed': 'Quality check passed',
+  'QCFailed': 'Quality check failed',
+  'QualityCheck': 'Quality check',
+  'InDiagnosis': 'Diagnosis',
+  'NoShow': 'No-show',
+  'ProviderUnavailable': 'Recognition not available',
+  'Sms': 'SMS',
+  'WhatsApp': 'WhatsApp',
+};
+
+/// Label of a status symbol in English: the override above, otherwise the symbol as a sentence
+/// ("PartiallyApproved" -> "Partially approved"). Acronyms keep their capitals.
+String statusLabel(String symbol) {
+  final fixed = statusEn[symbol];
+  if (fixed != null) return fixed;
+  final words = splitWords(symbol).split(' ').where((w) => w.isNotEmpty).toList();
+  if (words.isEmpty) return symbol;
+  final out = <String>[];
+  for (var i = 0; i < words.length; i++) {
+    final w = words[i];
+    final acronym = w.length > 1 && w == w.toUpperCase();
+    if (acronym) {
+      out.add(w);
+    } else if (i == 0) {
+      out.add(w[0].toUpperCase() + w.substring(1));
+    } else {
+      out.add(w.toLowerCase());
+    }
+  }
+  return out.join(' ');
+}
+
 class Strings {
   const Strings(this.lang);
   final String lang;
@@ -1168,14 +1204,15 @@ class Strings {
   bool get rtl => lang == 'ar';
 
   String t(String key, [List<Object?> args = const []]) {
-    var text = (lang == 'ar' ? ar[key] : null) ?? en[key] ?? key;
+    // A missing key never shows its internal name: fall back to readable words.
+    var text = (lang == 'ar' ? ar[key] : null) ?? en[key] ?? statusLabel(key);
     for (var i = 0; i < args.length; i++) {
       text = text.replaceAll('{$i}', '${args[i] ?? ''}');
     }
     return text;
   }
 
-  String status(String symbol) => lang == 'ar' ? (statusAr[symbol] ?? splitWords(symbol)) : splitWords(symbol);
+  String status(String symbol) => lang == 'ar' ? (statusAr[symbol] ?? statusLabel(symbol)) : statusLabel(symbol);
 
   /// Label of a service order status in the 16-step model (Draft = Requested, Booked = Confirmed, InDiagnosis = Diagnosis,
   /// ReadyForCollection = Billing cleared), identical to the portals.

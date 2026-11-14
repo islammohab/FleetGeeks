@@ -31,6 +31,9 @@ void main() {
 
   test('status symbols are split into words', () {
     expect(splitWords('ReadyForCollection'), 'Ready For Collection');
+    expect(statusLabel('PartiallyApproved'), 'Partially approved');
+    expect(statusLabel('Corrective'), 'Repair');
+    expect(const Strings('en').t('someMissingKey'), 'Some missing key');
     expect(const Strings('ar').status('Released'), 'تم الخروج');
   });
 

@@ -2,7 +2,7 @@ name: Build Android APKs
 
 on:
   push:
-    branches: [main]
+    branches: [main, mobile-quality]
   workflow_dispatch:
     inputs:
       api_url:
@@ -43,6 +43,10 @@ jobs:
         shell: pwsh
         run: ./tools/prepare_android.ps1 -Brand -AllowHttp
 
+      - name: Unit tests (shared package)
+        working-directory: mobile/packages/fg_core
+        run: flutter test
+
       - name: Build Workshop APK
         working-directory: mobile/apps/workshop_app
         run: flutter build apk --release --dart-define=FG_API=$FG_API --dart-define=FG_DEV_SIGNIN=$FG_DEV_SIGNIN
@@ -69,4 +73,5 @@ jobs:
           TAG="build-${{ github.run_number }}"
           gh release create "$TAG" ../out/*.apk -R "${{ github.repository }}" \
             --title "Fleet Geeks APKs #${{ github.run_number }}" \
-            --notes "API: $FG_API | Dev sign-in: $FG_DEV_SIGNIN" --latest
+            --notes "Branch: ${{ github.ref_name }} | API: $FG_API | Dev sign-in: $FG_DEV_SIGNIN" \
+            ${{ github.ref_name == 'main' && '--latest' || '--prerelease' }}

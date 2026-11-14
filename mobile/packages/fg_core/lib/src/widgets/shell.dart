@@ -437,7 +437,8 @@ class _ServerDialogState extends ConsumerState<_ServerDialog> {
     final s = ref.watch(stringsProvider);
     return AlertDialog(
       title: Text(s.t('serverAddress')),
-      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+      scrollable: true,
+      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         TextField(
           controller: _ctrl,
           autofocus: true,
@@ -445,28 +446,38 @@ class _ServerDialogState extends ConsumerState<_ServerDialog> {
           enabled: !_busy,
           keyboardType: TextInputType.url,
           textDirection: TextDirection.ltr,
-          decoration: InputDecoration(helperText: s.t('serverAddressHint'), helperMaxLines: 4, errorText: _error, errorMaxLines: 5),
+          decoration: InputDecoration(helperText: s.t('serverAddressHint'), helperMaxLines: 6),
           onSubmitted: (_) => _busy ? null : _connect(),
         ),
+        // The result is shown in full under the field: a long explanation is never cut off.
+        if (_error != null) ...[
+          const SizedBox(height: FgSpace.s3),
+          FgNotice(message: _error!, tone: FgTone.bad),
+        ],
         if (_busy) ...[
           const SizedBox(height: FgSpace.s3),
           Row(children: [
             const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)),
             const SizedBox(width: FgSpace.s2),
-            Text(s.t('serverChecking')),
+            Expanded(child: Text(s.t('serverChecking'))),
           ]),
         ],
+        const SizedBox(height: FgSpace.s2),
+        // Secondary choice: a quiet link under the field, not a third dialog button.
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: TextButton(
+            onPressed: _busy
+                ? null
+                : () async {
+                    await ref.read(serverAddressProvider.notifier).set('');
+                    if (context.mounted) Navigator.pop(context);
+                  },
+            child: Text(s.t('serverAddressReset')),
+          ),
+        ),
       ]),
       actions: [
-        TextButton(
-          onPressed: _busy
-              ? null
-              : () async {
-                  await ref.read(serverAddressProvider.notifier).set('');
-                  if (context.mounted) Navigator.pop(context);
-                },
-          child: Text(s.t('serverAddressReset')),
-        ),
         TextButton(onPressed: _busy ? null : () => Navigator.pop(context), child: Text(s.t('cancel'))),
         FilledButton(onPressed: _busy ? null : _connect, child: Text(s.t('serverConnect'))),
       ],
