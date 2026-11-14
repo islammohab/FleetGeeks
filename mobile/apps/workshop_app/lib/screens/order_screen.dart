@@ -115,10 +115,12 @@ class OrderScreen extends ConsumerWidget {
                   ),
                 );
             return Column(children: [
-              _OrderHeader(order: o),
+              _OrderHeader(order: o, flow: OrderFlow.fromJson(d['flow'])),
               Expanded(
                 child: TabBarView(children: [
                   tab([
+                    NextStepCard(status: o.s('Status')),
+                    const SizedBox(height: FgSpace.s3),
                     if (jobs.isEmpty) EmptyState(art: FgArt.empty, title: s.t('noJobsYet')),
                     for (final j in jobs) ...[
                       JobCard(orderId: orderId, job: j, tech: tech, qc: qc, evidence: asRows(d['evidence'])),
@@ -290,8 +292,11 @@ class _Rag extends StatelessWidget {
 
 /// Compact order header above the tabs: vehicle, status, promise countdown, custody and safety hold.
 class _OrderHeader extends ConsumerWidget {
-  const _OrderHeader({required this.order});
+  const _OrderHeader({required this.order, this.flow});
   final FgRow order;
+
+  /// Step model of the order from D365 (null = derived from the status).
+  final OrderFlow? flow;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -318,6 +323,8 @@ class _OrderHeader extends ConsumerWidget {
           ),
           StatusPill.order(o.s('Status')),
         ]),
+        const SizedBox(height: FgSpace.s3),
+        OrderProgress(status: o.s('Status'), flow: flow, compact: true),
         if (promise != null) ...[
           const SizedBox(height: FgSpace.s2),
           Row(children: [

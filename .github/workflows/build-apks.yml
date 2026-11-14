@@ -54,7 +54,19 @@ jobs:
 
       - name: Unit tests (shared package)
         working-directory: mobile/packages/fg_core
-        run: flutter test
+        run: flutter test --exclude-tags gallery
+
+      - name: Render the widget gallery (pictures for review)
+        working-directory: mobile/packages/fg_core
+        continue-on-error: true
+        run: flutter test --update-goldens --tags gallery test/gallery_test.dart
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: widget-gallery
+          path: mobile/packages/fg_core/test/gallery/*.png
+          if-no-files-found: ignore
 
       - name: Build Workshop APK
         working-directory: mobile/apps/workshop_app

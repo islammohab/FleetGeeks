@@ -561,6 +561,7 @@ ThemeData fgTheme(Brightness brightness, {String lang = 'en'}) {
       shape: RoundedRectangleBorder(borderRadius: FgRadius.brXl),
       titleTextStyle: text.titleLarge,
       contentTextStyle: text.bodyMedium,
+      actionsPadding: const EdgeInsets.fromLTRB(FgSpace.s4, 0, FgSpace.s4, FgSpace.s4),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,

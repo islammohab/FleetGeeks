@@ -17,7 +17,24 @@ import 'screens/tasks_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await loadSavedServer();
-  runApp(const ProviderScope(child: WorkshopApp()));
+  runApp(ProviderScope(
+    overrides: [
+      // The server dialog can read the address from a QR code.
+      serverQrScanProvider.overrideWithValue(
+        (context) => Navigator.of(context).push<String>(
+          MaterialPageRoute(
+            builder: (_) => Consumer(
+              builder: (context, ref, _) {
+                final s = ref.watch(stringsProvider);
+                return QrScanPage(title: s.t('serverScanQr'), hint: s.t('serverScanHint'));
+              },
+            ),
+          ),
+        ),
+      ),
+    ],
+    child: const WorkshopApp(),
+  ));
 }
 
 /// Prompt 3 (C1): the sign-in lists the active workshop users read from D365 (GET /dev/users?portal=workshop); this list

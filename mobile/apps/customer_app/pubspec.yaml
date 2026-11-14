@@ -19,6 +19,8 @@ dependencies:
   qr_flutter: ^4.1.0
   # Open downloaded PDFs (condition report, release note, service book) with the phone's viewer.
   open_filex: ^4.7.0
+  # Reads the server address from a QR code on the sign-in screen.
+  mobile_scanner: ^7.0.0
   # Payment links open in the browser.
   url_launcher: ^6.3.2
 dev_dependencies:

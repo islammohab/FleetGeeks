@@ -128,24 +128,40 @@ class KeyValueRow extends StatelessWidget {
   final bool tabular;
   final Widget? valueWidget;
 
+  /// Values longer than this are shown under their label instead of beside it, so nothing is squeezed or cut.
+  static const stackAbove = 26;
+
   @override
-  Widget build(BuildContext context) => Padding(
+  Widget build(BuildContext context) {
+    final muted = context.fg.textMuted;
+    final valueStyle = context.tt.bodyMedium?.copyWith(fontWeight: FontWeight.w500, fontFeatures: tabular ? FgFonts.tabular : null);
+    final text = value.isEmpty ? '—' : value;
+    final stacked = valueWidget == null && (text.length > stackAbove || text.contains('\n'));
+    if (stacked) {
+      return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (icon != null) ...[Icon(icon, size: 18, color: context.fg.textMuted), const SizedBox(width: FgSpace.s2)],
-          Expanded(flex: 2, child: Text(label, style: context.tt.bodyMedium?.copyWith(color: context.fg.textMuted))),
-          const SizedBox(width: FgSpace.s3),
+          if (icon != null) ...[Icon(icon, size: 18, color: muted), const SizedBox(width: FgSpace.s2)],
           Expanded(
-            flex: 3,
-            child: valueWidget ??
-                Text(
-                  value.isEmpty ? '—' : value,
-                  textAlign: TextAlign.end,
-                  style: context.tt.bodyMedium?.copyWith(fontWeight: FontWeight.w500, fontFeatures: tabular ? FgFonts.tabular : null),
-                ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label, style: context.tt.labelMedium?.copyWith(color: muted)),
+              const SizedBox(height: 2),
+              Text(text, style: valueStyle),
+            ]),
           ),
         ]),
       );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (icon != null) ...[Icon(icon, size: 18, color: muted), const SizedBox(width: FgSpace.s2)],
+        Expanded(flex: 2, child: Text(label, style: context.tt.bodyMedium?.copyWith(color: muted))),
+        const SizedBox(width: FgSpace.s3),
+        Expanded(flex: 3, child: valueWidget ?? Text(text, textAlign: TextAlign.end, style: valueStyle)),
+      ]),
+    );
+  }
 }
 
 /// Number plate look: bordered, tabular, always left-to-right (plates are not translated).

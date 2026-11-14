@@ -55,6 +55,17 @@ const Map<String, String> orderStepSuffix = {
   'ReadyForCollection': 'BillingCleared', 'Released': 'Released', 'Closed': 'Closed', 'Cancelled': 'Cancelled',
 };
 
+/// Who acts at each step (i18n key of the role), for the workshop "Next step" card.
+const Map<String, String> orderActorKey = {
+  'Draft': 'actorAdvisor', 'Booked': 'actorGate', 'Arrived': 'actorAdvisor', 'Received': 'actorAdvisor', 'InDiagnosis': 'actorAdvisor',
+  'AwaitingApproval': 'actorCustomer', 'Approved': 'actorAdvisor', 'InProgress': 'actorTechnician', 'AwaitingParts': 'actorStores',
+  'QualityCheck': 'actorQc', 'Rework': 'actorTechnician', 'ReadyForHandback': 'actorAdvisor', 'WorkAccepted': 'actorAccountant',
+  'ReadyForCollection': 'actorGate',
+};
+
+/// Service order symbol of a status (appointment symbols Requested / Held / Confirmed map to the first two steps).
+String orderStatusAlias(String status) => switch (status) { 'Requested' || 'Held' => 'Draft', 'Confirmed' => 'Booked', _ => status };
+
 /// Position 1-16 of a service order status in the model; 0 for Cancelled / unknown. Appointment symbols (Requested, Held,
 /// Confirmed) map to steps 1 and 2.
 int orderStepNumber(String status) {

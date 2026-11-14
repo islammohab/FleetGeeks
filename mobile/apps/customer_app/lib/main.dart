@@ -14,6 +14,7 @@ import 'screens/more_screen.dart';
 import 'screens/order_screen.dart';
 import 'screens/orders_screen.dart';
 import 'screens/pool_screen.dart';
+import 'screens/qr_scan_page.dart';
 import 'screens/usage_screen.dart';
 import 'screens/vehicle_screen.dart';
 import 'screens/vehicles_screen.dart';
@@ -21,7 +22,24 @@ import 'screens/vehicles_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await loadSavedServer();
-  runApp(const ProviderScope(child: CustomerApp()));
+  runApp(ProviderScope(
+    overrides: [
+      // The server dialog can read the address from a QR code.
+      serverQrScanProvider.overrideWithValue(
+        (context) => Navigator.of(context).push<String>(
+          MaterialPageRoute(
+            builder: (_) => Consumer(
+              builder: (context, ref, _) {
+                final s = ref.watch(stringsProvider);
+                return QrScanPage(title: s.t('serverScanQr'), hint: s.t('serverScanHint'));
+              },
+            ),
+          ),
+        ),
+      ),
+    ],
+    child: const CustomerApp(),
+  ));
 }
 
 /// Prompt 3 (C1): the sign-in lists the active customer, driver and internal fleet users read from D365

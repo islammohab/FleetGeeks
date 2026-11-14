@@ -403,3 +403,45 @@ class MessagesScreen extends ConsumerWidget {
     );
   }
 }
+
+/// Workshop view of the current step of a service order: what has to happen now and who does it, so the user never has
+/// to guess the next action. The texts are the keys `wsNext<Suffix>` of the 16-step model; [action] is the button of the
+/// step when the signed-in role can do it.
+class NextStepCard extends ConsumerWidget {
+  const NextStepCard({super.key, required this.status, this.action});
+  final String status;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(stringsProvider);
+    final fg = context.fg;
+    final symbol = orderStatusAlias(status);
+    final suffix = orderStepSuffix[symbol];
+    if (suffix == null) return const SizedBox.shrink();
+    final actor = orderActorKey[symbol];
+    return Semantics(
+      container: true,
+      child: Container(
+        padding: const EdgeInsets.all(FgSpace.s3),
+        decoration: BoxDecoration(color: fg.primaryBg, borderRadius: FgRadius.brLg, border: Border.all(color: fg.border)),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(FgIcons.arrowForward, size: 20, color: fg.primary),
+          const SizedBox(width: FgSpace.s3),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(s.t('nextStepTitle'), style: context.tt.labelMedium?.copyWith(color: fg.primary, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text(s.t('wsNext$suffix'), style: context.tt.bodyMedium),
+              if (actor != null) ...[
+                const SizedBox(height: FgSpace.s1),
+                Text(s.t('nextStepBy', [s.t(actor)]), style: context.tt.bodySmall?.copyWith(color: fg.textMuted)),
+              ],
+              if (action != null) ...[const SizedBox(height: FgSpace.s2), action!],
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}

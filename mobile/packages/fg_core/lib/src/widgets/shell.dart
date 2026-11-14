@@ -189,6 +189,10 @@ Future<String?> pickLookup(BuildContext context, {required String title, require
   );
 }
 
+/// Opens a camera that reads a QR code and returns its text (null when cancelled). The apps provide it; without it the
+/// server dialog offers typing only.
+final serverQrScanProvider = Provider<Future<String?> Function(BuildContext context)?>((ref) => null);
+
 /// D-111 / prompt 3 (C1): the active portal users of the company, read live from D365 for the development sign-in
 /// (GET /dev/users?portal=workshop|customer: id, label, type). It works without "Generate demo data" and reloads when the
 /// server address changes (the API client depends on it).
@@ -233,10 +237,10 @@ class _DevSignInScreenState extends ConsumerState<DevSignInScreen> {
     // prompt 3 (C1): the fixed list only when the API cannot be reached; D365 without active users shows that message instead
     final fallback = loaded.hasError;
     final all = <MapEntry<String, String>>[
-      if (live != null && live.isNotEmpty)
-        for (final u in live) MapEntry(u.s('id'), u.s('label').isEmpty ? u.s('id') : u.s('label'))
-      else if (fallback)
-        ...widget.fallbackUsers.entries,
+      // Only the live users of D365: when the server cannot be reached the screen explains how to connect instead of
+      // offering a built-in list that could not sign in anyway.
+      if (live != null)
+        for (final u in live) MapEntry(u.s('id'), u.s('label').isEmpty ? u.s('id') : u.s('label')),
     ];
     final q = _filter.text.trim().toLowerCase();
     final users = q.isEmpty ? all : all.where((e) => e.key.toLowerCase().contains(q) || e.value.toLowerCase().contains(q)).toList();
@@ -263,7 +267,7 @@ class _DevSignInScreenState extends ConsumerState<DevSignInScreen> {
             ]),
           ),
           const SizedBox(height: FgSpace.s4),
-          const _ServerAddressTile(),
+          _ServerAddressTile(state: fallback ? 'serverStatusDown' : (live != null ? 'serverStatusOk' : 'serverStatusChecking')),
           const SizedBox(height: FgSpace.s4),
           // D-110: production sign-in with the organisation's OpenID Connect provider (system browser, PKCE)
           if (FgOidc.configured) ...[
@@ -276,7 +280,21 @@ class _DevSignInScreenState extends ConsumerState<DevSignInScreen> {
             if (auth.hasError && !FgConfig.devSignIn) Padding(padding: const EdgeInsets.all(FgSpace.s2), child: ErrorText(auth.error!)),
             const SizedBox(height: FgSpace.s4),
           ],
-          if (FgConfig.devSignIn) ...[
+          if (FgConfig.devSignIn && fallback) ...[
+            // One clear message with what to do, instead of several stacked warnings.
+            FgNotice(
+              tone: FgTone.bad,
+              title: s.t('serverHelpTitle'),
+              message: '${s.t('serverHelpBody')}\n\n${s.t('serverHelpDetail', [s.error(loaded.error!)])}',
+            ),
+            const SizedBox(height: FgSpace.s4),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
+              onPressed: loaded.isLoading ? null : () => ref.invalidate(devUsersProvider(widget.portal)),
+              icon: const Icon(FgIcons.refresh, size: 20),
+              label: Text(s.t('retry')),
+            ),
+          ] else if (FgConfig.devSignIn) ...[
           FgNotice(tone: FgTone.attention, title: '${s.t('devSignIn')} · ${FgConfig.environment}', message: s.t('devSignInNote')),
           const SizedBox(height: FgSpace.s4),
           Row(children: [
@@ -287,13 +305,9 @@ class _DevSignInScreenState extends ConsumerState<DevSignInScreen> {
               icon: const Icon(FgIcons.refresh, size: 20),
             ),
           ]),
-          Text(s.t(fallback ? 'devUsersFallback' : 'devUsersLive'), style: context.tt.bodySmall),
+          Text(s.t('devUsersLive'), style: context.tt.bodySmall),
           const SizedBox(height: FgSpace.s2),
           if (loaded.isLoading && live == null) const LinearProgressIndicator(),
-          if (fallback && loaded.hasError) ...[
-            FgNotice(tone: FgTone.attention, message: s.error(loaded.error!)),
-            const SizedBox(height: FgSpace.s2),
-          ],
           if (all.length > 6) ...[
             TextField(
               controller: _filter,
@@ -363,7 +377,10 @@ class _DevSignInScreenState extends ConsumerState<DevSignInScreen> {
 
 /// The Fleet Geeks server the app talks to; tap to change it (saved on the phone, so one APK works on any network).
 class _ServerAddressTile extends ConsumerWidget {
-  const _ServerAddressTile();
+  const _ServerAddressTile({this.state});
+
+  /// i18n key of the connection state shown under the address (serverStatusOk / Down / Checking).
+  final String? state;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -377,7 +394,17 @@ class _ServerAddressTile extends ConsumerWidget {
       child: ListTile(
         leading: const Icon(FgIcons.server),
         title: Text(s.t('serverAddress')),
-        subtitle: Text(server, textDirection: TextDirection.ltr),
+        subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Text(server, textDirection: TextDirection.ltr),
+          if (state != null)
+            Text(
+              s.t(state!),
+              style: context.tt.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: switch (state) { 'serverStatusOk' => fg.success, 'serverStatusDown' => fg.danger, _ => fg.textMuted },
+              ),
+            ),
+        ]),
         trailing: const Icon(FgIcons.settings, size: 18),
         onTap: () => _edit(context, ref, server),
       ),
@@ -435,6 +462,7 @@ class _ServerDialogState extends ConsumerState<_ServerDialog> {
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(stringsProvider);
+    final scan = ref.watch(serverQrScanProvider);
     return AlertDialog(
       title: Text(s.t('serverAddress')),
       scrollable: true,
@@ -446,7 +474,24 @@ class _ServerDialogState extends ConsumerState<_ServerDialog> {
           enabled: !_busy,
           keyboardType: TextInputType.url,
           textDirection: TextDirection.ltr,
-          decoration: InputDecoration(helperText: s.t('serverAddressHint'), helperMaxLines: 6),
+          decoration: InputDecoration(
+            helperText: s.t('serverAddressHint'),
+            helperMaxLines: 6,
+            suffixIcon: scan == null
+                ? null
+                : IconButton(
+                    tooltip: s.t('serverScanQr'),
+                    icon: const Icon(FgIcons.qr),
+                    onPressed: _busy
+                        ? null
+                        : () async {
+                            final value = await scan(context);
+                            if (value == null || value.trim().isEmpty || !mounted) return;
+                            _ctrl.text = value.trim();
+                            await _connect();
+                          },
+                  ),
+          ),
           onSubmitted: (_) => _busy ? null : _connect(),
         ),
         // The result is shown in full under the field: a long explanation is never cut off.
