@@ -81,6 +81,7 @@ jobs:
           mkdir -p ../out
           cp apps/workshop_app/build/app/outputs/flutter-apk/app-release.apk ../out/FleetGeeks-Workshop.apk
           cp apps/customer_app/build/app/outputs/flutter-apk/app-release.apk ../out/FleetGeeks-Customer.apk
+          if ls packages/fg_core/test/gallery/*.png >/dev/null 2>&1; then (cd packages/fg_core/test/gallery && zip -q -r ../../../../../out/widget-gallery.zip .); fi
 
       - uses: actions/upload-artifact@v4
         with:
@@ -92,7 +93,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="build-${{ github.run_number }}"
-          gh release create "$TAG" ../out/*.apk -R "${{ github.repository }}" \
+          gh release create "$TAG" ../out/* -R "${{ github.repository }}" \
             --title "Fleet Geeks APKs #${{ github.run_number }}" \
             --notes "Branch: ${{ github.ref_name }} | API: $FG_API | Dev sign-in: $FG_DEV_SIGNIN" \
             ${{ github.ref_name == 'main' && '--latest' || '--prerelease' }}
