@@ -43,6 +43,15 @@ jobs:
         shell: pwsh
         run: ./tools/prepare_android.ps1 -Brand -AllowHttp
 
+      - name: Skip Android release lint of plugins (lint crashes on image_picker with the current toolchain)
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cat > ~/.gradle/init.d/no-lint-vital.gradle <<'GRADLE'
+          allprojects {
+              tasks.matching { it.name.startsWith('lintVital') }.configureEach { enabled = false }
+          }
+          GRADLE
+
       - name: Unit tests (shared package)
         working-directory: mobile/packages/fg_core
         run: flutter test
